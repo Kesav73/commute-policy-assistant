@@ -1,0 +1,12 @@
+{
+  "_comment": "Mock HR directory. The JWT issuer looks up company_id HERE; clients never supply it.",
+  "employees": [
+    {"employee_id": "E-ACME-001", "name": "Priya Sharma",  "company_id": "acme",  "role": "employee"},
+    {"employee_id": "E-ACME-002", "name": "Rahul Verma",   "company_id": "acme",  "role": "employee"},
+    {"employee_id": "A-ACME-ADM", "name": "Acme Admin",    "company_id": "acme",  "role": "admin"},
+    {"employee_id": "E-BOLT-001", "name": "Ananya Iyer",   "company_id": "bolt",  "role": "employee"},
+    {"employee_id": "A-BOLT-ADM", "name": "Bolt Admin",    "company_id": "bolt",  "role": "admin"},
+    {"employee_id": "E-CRST-001", "name": "Karthik Reddy", "company_id": "crest", "role": "employee"},
+    {"employee_id": "A-CRST-ADM", "name": "Crest Admin",   "company_id": "crest", "role": "admin"}
+  ]
+}
