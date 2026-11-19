@@ -19,9 +19,7 @@ Then open **http://localhost:8000/docs**. The first build takes ~2–3 minutes (
 ## Check it (inside the container)
 ```bash
 docker compose run --rm app pytest -q                                # 138 tests, never call a real LLM
-docker compose run --rm app python -m eval.run_retrieval             # 90-question retrieval scorecard
-docker compose run --rm app python -m eval.run_e2e --offline         # end-to-end flow, fake LLM
-docker compose run --rm app python -m eval.run_e2e                   # end-to-end with the real LLM (needs key, ~12 min)
+docker compose run --rm app python -m eval.run_retrieval             # retrieval scorecard: recall@1, recall@3 on 90 questions
 ```
 
 ## Try it

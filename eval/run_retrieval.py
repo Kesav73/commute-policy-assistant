@@ -1,39 +1,32 @@
-"""Retrieval evaluation: does the pipeline fetch the chunks a human said it should?
+"""Retrieval evaluation: does the retriever fetch the sections a human said it should?
 
-    python -m eval.run_retrieval            # score, print scorecard, write results
+    python -m eval.run_retrieval
 
 Inputs   eval/questions.jsonl  - 90 hand-labelled questions (30 per company)
 Outputs  eval/results/retrieval.jsonl          - one line per case, required format:
                                                   id, input, expected, actual, pass, notes
-         eval/results/retrieval_summary.json   - the numbers in the scorecard
+         eval/results/retrieval_summary.json   - the scorecard numbers
 
-Gold labels per question:
-    required  chunks that MUST be in the top 3 for a complete answer
-    helpful   relevant but optional (count towards precision, never a failure)
+Gold label used here:
+    required  the sections a complete answer needs (empty for "not covered" questions)
 
-Metrics (answerable questions = required is non-empty):
-    pass         every required chunk is in the top 3 AND the evidence gate let it through
-    recall@3     share of required chunks found in the top 3
-    hit@1        the top chunk is a required chunk
-    MRR          1 / rank of the first required chunk (0 if none in the top 3)
-    precision@3  share of the top 3 that are required or helpful
-    gate miss    the gate said "not covered" for an answerable question (a real failure)
-Not-covered questions (required is empty):
-    pass         no chunk from another company was retrieved (isolation)
-    gate catch   the gate already said "not covered" (0 LLM calls); the rest are left
-                 to the LLM, so this is reported but is not a failure at this stage
-All questions:
-    leaks        chunks from any other company - must always be 0
+Metrics, over answerable questions only (required is non-empty):
+    recall@k  share of the required sections that appear in the top k results,
+              averaged over questions. For a question that needs 2 sections,
+              recall@1 can be at most 0.5, by definition.
+    pass      recall@3 == 1 (every required section is in the top 3)
+
+Not-covered questions have nothing to recall, so they are listed but not scored.
+Safety invariant (not a metric): a chunk from another company must never be
+returned. If one is, the case fails and the run says so loudly.
 """
 import json
-import statistics
 import tempfile
 import time
 from collections import defaultdict
 from pathlib import Path
 
 from app.config import get_settings
-from app.embeddings import embedding_function
 from app.ingest import ingest_all
 from app.policy_parser import parse_policy_file
 from app.retriever import TOP_K, retrieve
@@ -44,6 +37,7 @@ QUESTIONS = EVAL_DIR / "questions.jsonl"
 RESULTS_DIR = EVAL_DIR / "results"
 CATEGORIES = ["direct", "paraphrase", "same_section", "multi_hop", "edge",
               "cross_company", "injection", "not_covered"]
+KS = (1, 3)
 
 
 # --------------------------------------------------------------- gold set --
@@ -86,131 +80,79 @@ def validate_gold(cases: list[dict], policies_dir: Path) -> None:
 
 # ---------------------------------------------------------------- scoring --
 
-def score_case(case: dict, r) -> dict:
-    got = [c.section for c in r.chunks]
-    required, helpful = case["required"], case["helpful"]
-    leaks = [c.id for c in r.chunks if c.company_id != case["company"]]
-    answerable = bool(required)
+def recall_at(k: int, required: list[str], ranked: list[str]) -> float:
+    return sum(s in ranked[:k] for s in required) / len(required)
 
-    row = {
-        "retrieved": [{"section": c.section, "title": c.section_title, "distance": round(c.distance, 3)}
-                      for c in r.chunks],
-        "has_evidence": r.has_evidence,
-        "best_distance": round(r.best_distance, 3) if r.chunks else None,
-        "leaks": leaks,
-        "latency_ms": round(sum(r.timings_ms.values()), 1),
-    }
+
+def score_case(case: dict, ranked: list[str], leaks: list[str]) -> dict:
+    """ranked: section ids in retrieval order. Returns actual, pass, notes."""
+    required = case["required"]
+    actual = {"retrieved": ranked, "leaks": leaks}
     notes = []
-    if answerable:
-        found = [s for s in required if s in got]
-        ranks = [got.index(s) + 1 for s in required if s in got]
-        row.update(
-            recall_at_3=len(found) / len(required),
-            hit_at_1=bool(got) and got[0] in required,
-            mrr=1 / min(ranks) if ranks else 0.0,
-            precision_at_3=sum(s in required + helpful for s in got) / len(got) if got else 0.0,
-            gate_miss=not r.has_evidence,
-        )
-        passed = len(found) == len(required) and r.has_evidence and not leaks
-        if missing := [s for s in required if s not in got]:
-            notes.append(f"missed required {missing}")
-        if not r.has_evidence:
-            notes.append(f"gate wrongly said not covered (best {row['best_distance']})")
-        if got and got[0] not in required:
-            notes.append(f"top-1 was §{got[0]}")
+    if required:
+        for k in KS:
+            actual[f"recall_at_{k}"] = recall_at(k, required, ranked)
+        passed = actual["recall_at_3"] == 1.0
+        if missing := [s for s in required if s not in ranked[:3]]:
+            notes.append(f"missed {missing}")
+        if ranked and ranked[0] not in required:
+            notes.append(f"top-1 was {ranked[0]}")
     else:
-        row["gate_caught"] = not r.has_evidence
-        passed = not leaks
-        notes.append("gate: not covered (0 LLM calls)" if not r.has_evidence
-                     else f"gate passed it on (best {row['best_distance']}); LLM must decide")
+        passed = True
+        notes.append("not covered: nothing to recall")
     if leaks:
+        passed = False
         notes.append(f"LEAK {leaks}")
-    return {"passed": passed, "row": row, "notes": "; ".join(notes) or "ok"}
+    return {"actual": actual, "pass": passed, "notes": "; ".join(notes) or "ok"}
 
 
-def mean(xs) -> float:
+def mean(xs) -> float | None:
     xs = list(xs)
-    return sum(xs) / len(xs) if xs else float("nan")
+    return round(sum(xs) / len(xs), 3) if xs else None
 
 
-def summarise(scored: list[tuple[dict, dict]]) -> dict:
-    def block(items):
-        ans = [s["row"] for c, s in items if c["required"]]
-        nc = [s["row"] for c, s in items if not c["required"]]
-        return {
-            "n": len(items),
-            "pass": sum(s["passed"] for _, s in items),
-            "answerable": len(ans),
-            "recall_at_3": mean(r["recall_at_3"] for r in ans),
-            "hit_at_1": mean(r["hit_at_1"] for r in ans),
-            "mrr": mean(r["mrr"] for r in ans),
-            "precision_at_3": mean(r["precision_at_3"] for r in ans),
-            "gate_misses": sum(r["gate_miss"] for r in ans),
-            "not_covered": len(nc),
-            "gate_caught": sum(r["gate_caught"] for r in nc),
-            "leaks": sum(len(s["row"]["leaks"]) for _, s in items),
-        }
+def block(rows: list[dict]) -> dict:
+    ans = [r for r in rows if r["expected"]["required"]]
+    out = {"n": len(rows), "answerable": len(ans),
+           "pass": sum(r["pass"] for r in ans)}
+    for k in KS:
+        out[f"recall_at_{k}"] = mean(r["actual"][f"recall_at_{k}"] for r in ans)
+    out["leaks"] = sum(len(r["actual"]["leaks"]) for r in rows)
+    return out
 
-    by_cat, by_co, by_diff = defaultdict(list), defaultdict(list), defaultdict(list)
-    for c, s in scored:
-        by_cat[c["category"]].append((c, s))
-        by_co[c["company"]].append((c, s))
-        by_diff[c["difficulty"]].append((c, s))
-    lat = [s["row"]["latency_ms"] for _, s in scored]
+
+def summarise(rows: list[dict]) -> dict:
+    groups = {"category": defaultdict(list), "company": defaultdict(list)}
+    for r in rows:
+        groups["category"][r["expected"]["category"]].append(r)
+        groups["company"][r["input"]["company"]].append(r)
     return {
-        "overall": block(scored),
-        "by_category": {k: block(by_cat[k]) for k in CATEGORIES if k in by_cat},
-        "by_company": {k: block(v) for k, v in sorted(by_co.items())},
-        "by_difficulty": {k: block(by_diff[k]) for k in ("easy", "medium", "hard") if k in by_diff},
-        "latency_ms": {"p50": round(statistics.median(lat), 1),
-                       "p95": round(statistics.quantiles(lat, n=20)[18], 1),
-                       "max": round(max(lat), 1)},
+        "overall": block(rows),
+        "by_category": {k: block(groups["category"][k]) for k in CATEGORIES if k in groups["category"]},
+        "by_company": {k: block(v) for k, v in sorted(groups["company"].items())},
     }
-
-
-def gate_sweep(scored: list[tuple[dict, dict]]) -> list[dict]:
-    """How each candidate threshold trades answerable questions lost vs not-covered caught."""
-    ans = [s["row"]["best_distance"] for c, s in scored if c["required"]]
-    nc = [s["row"]["best_distance"] for c, s in scored if not c["required"]]
-    rows = []
-    for t in [0.55, 0.60, 0.65, 0.70, 0.75, 0.80, 0.85]:
-        rows.append({"threshold": t,
-                     "answerable_wrongly_blocked": sum(d > t for d in ans),
-                     "not_covered_caught": sum(d > t for d in nc)})
-    return rows
 
 
 # ---------------------------------------------------------------- report --
 
-def fmt(x) -> str:
-    return "  -  " if x != x else f"{x:5.2f}"  # NaN -> "-"
+def print_scorecard(summary: dict) -> None:
+    head = f"{'':16}{'answerable':>11}{'pass':>9}{'recall@1':>10}{'recall@3':>10}{'leaks':>7}"
 
-
-def print_scorecard(summary: dict, sweep: list[dict], n_ans: int, n_nc: int) -> None:
-    head = (f"{'':16}{'n':>4}{'pass':>7}{'recall@3':>10}{'hit@1':>8}{'MRR':>7}{'prec@3':>8}"
-            f"{'gate-miss':>11}{'gate-catch':>12}{'leaks':>7}")
+    def fmt(x):
+        return "    -" if x is None else f"{x:5.2f}"
 
     def line(name, b):
-        catch = f"{b['gate_caught']}/{b['not_covered']}" if b["not_covered"] else "-"
-        miss = f"{b['gate_misses']}" if b["answerable"] else "-"
-        return (f"{name:16}{b['n']:>4}{b['pass']:>4}/{b['n']:<3}{fmt(b['recall_at_3']):>9}"
-                f"{fmt(b['hit_at_1']):>8}{fmt(b['mrr']):>7}{fmt(b['precision_at_3']):>8}"
-                f"{miss:>11}{catch:>12}{b['leaks']:>7}")
+        p = f"{b['pass']}/{b['answerable']}" if b["answerable"] else "-"
+        return (f"{name:16}{b['answerable']:>11}{p:>9}{fmt(b['recall_at_1']):>10}"
+                f"{fmt(b['recall_at_3']):>10}{b['leaks']:>7}")
 
     print("\n" + "=" * len(head) + "\nRETRIEVAL SCORECARD\n" + "=" * len(head))
     print(head)
     print(line("OVERALL", summary["overall"]))
-    for title, key in (("by category", "by_category"), ("by company", "by_company"),
-                       ("by difficulty", "by_difficulty")):
+    for title, key in (("by category", "by_category"), ("by company", "by_company")):
         print(f"-- {title}")
         for k, b in summary[key].items():
             print(line(k, b))
-    lat = summary["latency_ms"]
-    print(f"\nretrieval latency (embed + search): p50 {lat['p50']} ms, p95 {lat['p95']} ms, max {lat['max']} ms")
-    print(f"\nevidence-gate sweep ({n_ans} answerable, {n_nc} not covered):")
-    print(f"  {'threshold':>9}  {'answerable wrongly blocked':>27}  {'not-covered caught':>19}")
-    for r in sweep:
-        print(f"  {r['threshold']:>9.2f}  {r['answerable_wrongly_blocked']:>27}  {r['not_covered_caught']:>19}")
 
 
 def main() -> None:
@@ -222,40 +164,33 @@ def main() -> None:
     with tempfile.TemporaryDirectory() as tmp:
         client = get_client(Path(tmp))
         ingest_all(client, s.policies_dir)
-        embedding_function()(["warm up"])
-
-        scored, lines = [], []
+        rows = []
         for c in cases:
             r = retrieve(client, c["company"], c["question"])
-            res = score_case(c, r)
-            scored.append((c, res))
-            lines.append({
+            ranked = [ch.section for ch in r.chunks]
+            leaks = [ch.id for ch in r.chunks if ch.company_id != c["company"]]
+            res = score_case(c, ranked, leaks)
+            rows.append({
                 "id": c["id"],
                 "input": {"company": c["company"], "question": c["question"]},
-                "expected": {"status": c["expected_status"], "required": c["required"],
-                             "helpful": c["helpful"], "category": c["category"],
-                             "difficulty": c["difficulty"]},
-                "actual": res["row"],
-                "pass": res["passed"],
-                "notes": res["notes"],
+                "expected": {"required": c["required"], "category": c["category"]},
+                **res,
             })
 
-    summary = summarise(scored)
-    sweep = gate_sweep(scored)
+    summary = summarise(rows)
     RESULTS_DIR.mkdir(exist_ok=True)
-    (RESULTS_DIR / "retrieval.jsonl").write_text("\n".join(json.dumps(l) for l in lines) + "\n")
+    (RESULTS_DIR / "retrieval.jsonl").write_text("\n".join(json.dumps(r) for r in rows) + "\n")
     (RESULTS_DIR / "retrieval_summary.json").write_text(json.dumps(
-        {"generated_at": time.strftime("%Y-%m-%d %H:%M:%S"),
-         "gate_threshold": s.retrieval_max_distance, "top_k": TOP_K,
-         **summary, "gate_sweep": sweep}, indent=2))
+        {"generated_at": time.strftime("%Y-%m-%d %H:%M:%S"), "top_k": TOP_K, **summary}, indent=2))
 
-    print_scorecard(summary, sweep, summary["overall"]["answerable"], summary["overall"]["not_covered"])
-    failures = [l for l in lines if not l["pass"]]
+    print_scorecard(summary)
+    failures = [r for r in rows if not r["pass"]]
     print(f"\nfailed cases ({len(failures)}):")
-    for l in failures:
-        top = " ".join(f"§{x['section']}({x['distance']})" for x in l["actual"]["retrieved"])
-        print(f"  {l['id']:9} [{l['expected']['category']}] {l['input']['question'][:60]!r}")
-        print(f"            want {l['expected']['required']}  got {top}  -> {l['notes']}")
+    for r in failures:
+        print(f"  {r['id']:9} [{r['expected']['category']}] {r['input']['question'][:62]!r}")
+        print(f"            want {r['expected']['required']}  got {r['actual']['retrieved']}  -> {r['notes']}")
+    if summary["overall"]["leaks"]:
+        print("\n!! CROSS-COMPANY LEAK: chunks from another company were returned !!")
     print(f"\nwrote {RESULTS_DIR / 'retrieval.jsonl'} and retrieval_summary.json")
 
 

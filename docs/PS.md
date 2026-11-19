@@ -188,4 +188,4 @@ Status is updated as we build.
 | G5 | No keys committed | ☐ |
 | D1 | GitHub repo | ✅ github.com/Kesav73/commute-policy-assistant (private for now) |
 | D2 | One-command start | ✅ `docker compose up` (works with or without a key) |
-| D3–D6 | README, report, JSONL, video | 🟡 JSONL ✅ (`eval/results/e2e.jsonl`); README / report / video pending |
+| D3–D6 | README, report, JSONL, video | 🟡 JSONL ✅ (`eval/results/retrieval.jsonl`); README / report / video pending |

@@ -22,7 +22,7 @@ BASE_URLS = {
 
 # Per-model request settings, matched by prefix. Reasoning is switched off / kept low:
 # the task is read-and-cite, and hidden reasoning tokens only add latency
-# (gpt-oss-20b at effort=medium doubled p95 in eval/bench_llm.py).
+# (gpt-oss-20b at effort=medium doubled p95 in our latency benchmark).
 MODEL_PARAMS = {
     "qwen/": {"reasoning_effort": "none"},
     "openai/gpt-oss": {"reasoning_effort": "low"},

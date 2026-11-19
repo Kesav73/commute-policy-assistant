@@ -1,7 +1,7 @@
 # One command:  docker compose up
 #   API + Swagger UI:  http://localhost:8000/docs
 #   Tests:             docker compose run --rm app pytest -q
-#   Evaluation:        docker compose run --rm app python -m eval.run_e2e --offline
+#   Evaluation:        docker compose run --rm app python -m eval.run_retrieval
 services:
   app:
     build: .

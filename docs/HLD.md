@@ -71,7 +71,7 @@ An HTTP service where an employee, identified by a JWT, asks a question about co
 | Auth | **PyJWT**, HS256 | Small, standard; we are our own issuer so a shared secret is enough | RS256 (better when issuer ≠ verifier; overkill here) |
 | Vector store | **Chroma, embedded** (`PersistentClient`) | Required; embedded = no extra container → fewer things to break in `docker compose up` | Chroma server container (more realistic, more moving parts) |
 | Embeddings | **all-MiniLM-L6-v2 (ONNX, via Chroma's default)** | Free, local, ~10 ms per query, no PyTorch → small image; baked into the Docker image at build time | OpenAI/Gemini embeddings (network call, quota, latency) |
-| LLM | **Groq: `qwen/qwen3.8-27b` primary, `openai/gpt-oss-120b` fallback**; **Fake** (tests/offline) | Benchmarked (`eval/bench_llm.py`, real prompts): Qwen p95 0.4–0.7 s and resisted the planted injection; gpt-oss-120b p95 0.94 s, a separate model with its own rate limits; gpt-oss-20b once obeyed the injection. Groq = fastest free tier. One OpenAI-compatible client, swap by env var | Gemini free Flash (~20 req/day, too low), local Ollama (slow on CPU, hurts C1) |
+| LLM | **Groq: `qwen/qwen3.8-27b` primary, `openai/gpt-oss-120b` fallback**; **Fake** (tests/offline) | Benchmarked on Groq with real prompts: Qwen p95 0.4–0.7 s and resisted the planted injection; gpt-oss-120b p95 0.94 s, a separate model with its own rate limits; gpt-oss-20b once obeyed the injection. Groq = fastest free tier. One OpenAI-compatible client, swap by env var | Gemini free Flash (~20 req/day, too low), local Ollama (slow on CPU, hurts C1) |
 | Bonus retrieval | **BM25 (`rank_bm25`) + vector, fused with RRF** | Cheap, explainable, helps exact terms ("no-show", "Saturday") | Cross-encoder rerank (slower), query rewrite (costs our 2nd LLM call) |
 | Tests | **pytest + FakeLLM** | G2: no quota or network needed | — |
 | Packaging | **Docker Compose**, one service | D2: one command | — |
@@ -315,7 +315,9 @@ For `not_covered`, the employee always sees our fixed message from `messages.py`
 
 ## 11. Evaluation design (R11, R12, A4)
 
-**Files:** `eval/questions.jsonl` (gold, written by hand from POLICY_MATRIX) → `python -m eval.run` → `eval/results.jsonl` (required format) + a printed scorecard.
+**Files:** `eval/questions.jsonl` (90 gold cases, written by hand from POLICY_MATRIX) → `python -m eval.run_retrieval` → `eval/results/retrieval.jsonl` (required format) + a printed scorecard.
+
+**Current status:** only the retrieval stage is scored, with two metrics: **recall@1** and **recall@3** (share of the gold `required` sections found in the top 1 / top 3). End-to-end answer scoring and latency benchmarks will be rebuilt in a more structured way; the design below is the target.
 
 **Gold case** (internal fields):
 ```json
@@ -361,8 +363,7 @@ app/
   messages.py      every user-facing string
 eval/
   questions.jsonl  90 hand-labelled gold cases
-  run_retrieval.py retrieval scorecard      run_e2e.py  end-to-end scorecard (D5 JSONL)
-  bench_llm.py     LLM latency benchmark    results/    committed scorecards
+  run_retrieval.py retrieval scorecard (recall@1, recall@3)   results/  committed scorecards
 tests/  test_auth · test_policy_parser · test_ingest · test_retriever · test_eval_gold
         test_llm · test_answerer · test_pipeline · test_api
 policies/  sample_data/  docs/

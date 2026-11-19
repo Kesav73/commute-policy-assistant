@@ -98,7 +98,7 @@ def get_settings() -> Settings:
     )
 
 
-# Defaults chosen from eval/bench_llm.py: Qwen was fastest and resisted the planted
+# Defaults chosen from a latency benchmark on Groq: Qwen was fastest and resisted the planted
 # injection; gpt-oss-120b is a different model with its own rate limits.
 LLM_DEFAULTS = {
     "groq": ("qwen/qwen3.8-27b", "openai/gpt-oss-120b", "GROQ_API_KEY"),
