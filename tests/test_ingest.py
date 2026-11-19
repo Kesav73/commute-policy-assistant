@@ -4,9 +4,8 @@ from pathlib import Path
 
 import numpy as np
 import pytest
-from chromadb.utils.embedding_functions import DefaultEmbeddingFunction
 
-from app.embeddings import embedding_function
+from app.embeddings import EMBEDDING_ID, embed_documents, embed_query
 from app.ingest import IngestError, ingest_all
 from app.store import chunk_counts, get_company_collection, open_store
 
@@ -43,10 +42,10 @@ def test_vector_index_holds_only_ids_and_vectors(store):
     ingest_all(store, POLICIES)
     acme = get_company_collection(store, "acme")
     assert acme.configuration_json["hnsw"]["space"] == "cosine"
-    assert acme.metadata == {"company_id": "acme", "embedding_model": "all-MiniLM-L6-v2"}
+    assert acme.metadata == {"company_id": "acme", "embedding": EMBEDDING_ID}
     got = acme.get(ids=["acme-transport-policy:4.1"], include=["documents", "metadatas", "embeddings"])
     assert got["documents"] == [None] and got["metadatas"] == [None]   # no content in Chroma
-    assert len(got["embeddings"][0]) == 384
+    assert len(got["embeddings"][0]) == 768
 
 
 def test_chunk_store_holds_content_and_citation_metadata(store, tmp_path):
@@ -99,8 +98,26 @@ def test_unknown_company_has_no_collection(store):
     assert get_company_collection(store, "evilcorp") is None
 
 
-def test_fast_embedding_matches_chroma_default():
-    # Our padding fix must not change the vectors, only the speed.
-    texts = ["Can I book a cab on Saturday?", "A much longer piece of text " * 10]
-    ours, theirs = np.array(embedding_function()(texts)), np.array(DefaultEmbeddingFunction()(texts))
-    assert np.abs(ours - theirs).max() < 1e-5
+def test_embeddings_are_unit_length_768d():
+    v = embed_documents(["Escort after 8 PM.", "A much longer piece of text " * 20])
+    assert v.shape == (2, 768)
+    assert np.allclose(np.linalg.norm(v, axis=1), 1.0, atol=1e-5)
+
+
+def test_query_and_document_prefixes_give_different_vectors():
+    # Same words, different role: the prefix must actually reach the model.
+    text = "Who approves an airport trip?"
+    assert not np.allclose(embed_query(text)[0], embed_documents([text])[0], atol=1e-3)
+
+
+def test_embedding_id_names_model_and_both_prefixes():
+    assert EMBEDDING_ID == "nomic-ai/nomic-embed-text-v1.5|search_document:|search_query:"
+
+
+def test_document_cache_returns_the_same_vectors():
+    from app.embeddings import _DOC_CACHE, _embed, DOCUMENT_PREFIX
+    texts = ["Cache check one.", "Cache check two.", "Cache check one."]
+    first = embed_documents(texts)
+    assert "Cache check one." in _DOC_CACHE
+    assert np.allclose(first, embed_documents(texts))                       # from cache
+    assert np.allclose(first[1], _embed([DOCUMENT_PREFIX + texts[1]])[0], atol=1e-5)  # == fresh

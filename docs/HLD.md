@@ -72,7 +72,7 @@ An HTTP service where an employee, identified by a JWT, asks a question about co
 | API | **FastAPI** | Required; typed request models; dependency injection for auth | — |
 | Auth | **PyJWT**, HS256 | Small, standard; we are our own issuer so a shared secret is enough | RS256 (better when issuer ≠ verifier; overkill here) |
 | Vector store | **Chroma, embedded** (`PersistentClient`) | Required; embedded = no extra container → fewer things to break in `docker compose up` | Chroma server container (more realistic, more moving parts) |
-| Embeddings | **all-MiniLM-L6-v2 (ONNX, via Chroma's default)** | Free, local, ~10 ms per query, no PyTorch → small image; baked into the Docker image at build time | OpenAI/Gemini embeddings (network call, quota, latency) |
+| Embeddings | **nomic-embed-text-v1.5 (ONNX via fastembed), with `search_query:` / `search_document:` prefixes** | Chosen by benchmark (journey 07): recall@1 0.64 / recall@3 0.89 vs MiniLM's 0.55 / 0.82, ~35 ms per query; free, local, no PyTorch; baked into the image, runs offline | all-MiniLM-L6-v2 (former default: faster, smaller, less accurate), bge-large (ties, 2–3× cost), hosted embedding APIs (network call, quota, latency) |
 | LLM | **Groq: `qwen/qwen3.8-27b` primary, `openai/gpt-oss-120b` fallback**; **Fake** (tests/offline) | Benchmarked on Groq with real prompts: Qwen p95 0.4–0.7 s and resisted the planted injection; gpt-oss-120b p95 0.94 s, a separate model with its own rate limits; gpt-oss-20b once obeyed the injection. Groq = fastest free tier. One OpenAI-compatible client, swap by env var | Gemini free Flash (~20 req/day, too low), local Ollama (slow on CPU, hurts C1) |
 | Bonus retrieval | **BM25 (`rank_bm25`) + vector, fused with RRF** | Cheap, explainable, helps exact terms ("no-show", "Saturday") | Cross-encoder rerank (slower), query rewrite (costs our 2nd LLM call) |
 | Tests | **pytest + FakeLLM** | G2: no quota or network needed | — |
@@ -367,7 +367,7 @@ app/
   config.py        env settings, JWT secret, LLM provider choice
   auth.py          JWT issue/verify, Principal, current_principal / require_admin
   policy_parser.py front matter + one chunk per sub-section
-  embeddings.py    all-MiniLM-L6-v2 (ONNX) with dynamic padding
+  embeddings.py    nomic-embed-text-v1.5 + its query/document prefixes
   chunk_store.py   chunk content (id → text + metadata), one JSONL per company
   store.py         Chroma: ids + vectors, one collection per company
   ingest.py        parse → chunk store + embed → Chroma; startup seeding
@@ -393,7 +393,7 @@ Dockerfile  docker-compose.yml  requirements.txt  pytest.ini  .env.example  READ
 |---|---|---|
 | Sub-section = chunk | Exact, checkable citations (§4.1); one rule per chunk | Relies on structured docs; unstructured PDFs would need a fallback splitter |
 | Collection per company | Isolation by construction: a query can't reach another company | More collections; cross-company analytics would need a different design (not a requirement) |
-| Evidence-gate threshold before the LLM | Fast, cheap, honest "not covered" for clearly unrelated questions | **Measured:** real matches sit at ~0.38–0.52 cosine distance and off-topic questions at ~0.77–0.87, but the middle overlaps (a valid Bolt guest question is 0.68; a not-covered "dog in the cab" is 0.61; a not-covered Crest cancellation is 0.50). So the gate is **conservative (0.75)** and only cuts obvious misses; the LLM makes the final "not covered" call from the text. τ is tuned on the eval set. |
+| Evidence-gate threshold before the LLM | Fast, cheap, honest "not covered" for clearly unrelated questions | **Measured (nomic):** real matches sit at 0.13–0.49 cosine distance (median 0.24), not-covered gold questions at 0.27–0.42, clearly off-topic ones at 0.45–0.56: the groups overlap. So the gate is **conservative (0.50)**: the tightest value that blocks none of the 75 answerable questions. It only cuts obvious nonsense; the LLM makes the final "not covered" call from the text. Re-tuned whenever the embedding model changes (journey 03, 08). |
 | Embedded Chroma, local embeddings | One container, no network for retrieval, fast | Not horizontally scalable as-is |
 | Deterministic eval judging | Rerunnable, free, objective | Can under-credit good paraphrases |
 | Groq 8B model | Speed (C1), free | Weaker reasoning and injection resistance than large models; mitigated by isolation and validation |

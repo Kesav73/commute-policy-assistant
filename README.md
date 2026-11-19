@@ -5,13 +5,13 @@ An assistant that answers employees' commute and transport questions **only from
 Built for the MoveInSync AI Developer case study B. Work in progress: a full README with design decisions, trade-offs and evaluation results will follow.
 
 ## Stack
-Python · FastAPI · Chroma (embedded) · all-MiniLM-L6-v2 embeddings (local ONNX) · Groq (`qwen/qwen3.8-27b`, fallback `openai/gpt-oss-120b`) · JWT (HS256)
+Python · FastAPI · Chroma (embedded) · nomic-embed-text-v1.5 embeddings (local ONNX via fastembed) · Groq (`qwen/qwen3.8-27b`, fallback `openai/gpt-oss-120b`) · JWT (HS256)
 
 ## Run it: one command
 ```bash
 docker compose up
 ```
-Then open **http://localhost:8000/docs**. The first build takes ~2–3 minutes (the embedding model is baked into the image); after that, startup takes ~5 seconds.
+Then open **http://localhost:8000/docs**. The first build takes a few minutes (the ~0.5 GB embedding model is baked into the image; image ~1.9 GB, ~1.3 GB RAM); after that, startup takes ~5 seconds.
 
 - **No API key needed.** Without one, the service runs in **offline mode** with a deterministic fake LLM, and `/health` shows `"llm_provider": "fake"`.
 - **Real answers:** `cp .env.example .env`, set `GROQ_API_KEY` (free at https://console.groq.com/keys), then `docker compose up` again.

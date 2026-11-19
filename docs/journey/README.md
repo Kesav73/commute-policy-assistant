@@ -20,7 +20,7 @@ A running log of every experiment and improvement: what we tried, how we measure
 
 | Configuration | recall@1 | recall@3 | avg latency | Entry |
 |---|---|---|---|---|
-| Sub-section chunks + all-MiniLM-L6-v2, top 3, cosine; separate chunk store | 0.55 | 0.82 | 4.4 ms | [06](06-separate-chunk-store.md) |
+| Sub-section chunks + nomic-embed-text-v1.5 (with prefixes), top 3, cosine; separate chunk store | 0.64 | 0.89 | ~33 ms | [08](08-switch-to-nomic.md) |
 
 ## Index
 
@@ -32,4 +32,5 @@ A running log of every experiment and improvement: what we tried, how we measure
 | 04 | 2026-11-19 | [First end-to-end evaluation](04-first-e2e-eval.md) | 72/90 pass, 0 leaks, p95 0.83 s; most failures come from retrieval |
 | 05 | 2026-11-19 | [Gold set audit and new retrieval baseline](05-gold-set-audit-and-baseline.md) | 4 labels fixed; baseline recall@1 0.55, recall@3 0.82, 5.1 ms |
 | 06 | 2026-11-19 | [Separate chunk store](06-separate-chunk-store.md) | Chroma holds ids + vectors only; same recall, ~10% faster |
-| 07 | 2026-11-20 | [Embedding models](07-embedding-models.md) | nomic-embed-text-v1.5 best value: recall@1 0.64, recall@3 0.89 (+8 questions), ~35 ms; bge-large ties at 2–3× the cost; not yet switched in the app |
+| 07 | 2026-11-20 | [Embedding models](07-embedding-models.md) | nomic-embed-text-v1.5 best value: recall@1 0.64, recall@3 0.89 (+8 questions), ~35 ms; bge-large ties at 2–3× the cost; switched in 08 |
+| 08 | 2026-11-20 | [Switch the app to nomic](08-switch-to-nomic.md) | App now 0.64 / 0.89; gate re-tuned 0.75 → 0.50; image 1.9 GB, RAM ~1.28 GB |

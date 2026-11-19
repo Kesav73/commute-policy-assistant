@@ -90,8 +90,9 @@ def get_settings() -> Settings:
         # Evidence gate: if even the best chunk is further than this (cosine distance),
         # answer "not covered" without calling the LLM. Conservative on purpose: only
         # clearly unrelated questions are cut here; borderline ones go to the LLM.
-        # Provisional value, tuned on the evaluation set.
-        retrieval_max_distance=float(os.getenv("RETRIEVAL_MAX_DISTANCE", "0.75")),
+        # 0.50 = the tightest value that blocks none of the 75 answerable gold questions
+        # with nomic-embed-text-v1.5 (worst real one: 0.489). See docs/journey/08.
+        retrieval_max_distance=float(os.getenv("RETRIEVAL_MAX_DISTANCE", "0.50")),
         **_llm_settings(),
     )
 

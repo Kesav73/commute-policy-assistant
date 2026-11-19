@@ -12,7 +12,7 @@ from app.store import open_store
 from tests.conftest import bearer
 
 POLICIES = Path(__file__).resolve().parent.parent / "policies"
-Q = {"question": "Do women get an escort on late drops?"}
+Q = {"question": "Does a trained security escort travel with women on night drops?"}
 
 
 @pytest.fixture(scope="module")
@@ -119,7 +119,7 @@ def test_non_json_body_is_422(client, acme):
 # ---------------------------------------------------------- not covered --
 
 def test_not_covered_is_200_with_desk_message(client, acme):
-    r = client.post("/ask", json={"question": "What is the capital of France?"}, headers=acme)
+    r = client.post("/ask", json={"question": "Write me a poem about cats"}, headers=acme)
     assert r.status_code == 200
     assert r.json()["status"] == "not_covered"
     assert r.json()["answer"] == messages.NOT_COVERED and "transport desk" in r.json()["answer"]

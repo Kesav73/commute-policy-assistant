@@ -16,8 +16,8 @@ import time
 from dataclasses import dataclass, field
 
 from app.config import get_settings
-from app.embeddings import embedding_function
-from app.store import PolicyStore, get_company_collection, open_store
+from app.embeddings import EMBEDDING_ID, embed_query
+from app.store import PolicyStore, StoreError, get_company_collection, open_store
 
 log = logging.getLogger("policy_assistant")
 
@@ -65,9 +65,15 @@ def retrieve(
     if collection is None or collection.count() == 0:
         # No policy for this company: nothing to search, nothing to leak.
         return RetrievalResult(company_id, question, [], False, max_distance)
+    if (collection.metadata or {}).get("embedding") != EMBEDDING_ID:
+        # Vectors made by a different model/prefix would be compared with this
+        # question's vector: results would be quietly wrong. Fail loudly instead
+        # (the pipeline turns this into "try again"; a re-ingest fixes it).
+        raise StoreError(f"{collection.name} was built with {(collection.metadata or {}).get('embedding')!r}, "
+                         f"expected {EMBEDDING_ID!r}; re-ingest needed")
 
     t0 = time.perf_counter()
-    query_vector = embedding_function()([question])   # same model as ingest
+    query_vector = embed_query(question)   # same model + matching prefix as ingest
     t1 = time.perf_counter()
     raw = collection.query(
         query_embeddings=query_vector,
@@ -103,7 +109,7 @@ def main() -> None:
     if len(sys.argv) != 3:
         sys.exit('usage: python -m app.retriever <company_id> "<question>"')
     company_id, question = sys.argv[1], sys.argv[2]
-    embedding_function()(["warm up"])  # load the model first, so the timing below is per-question
+    embed_query("warm up")  # load the model first, so the timing below is per-question
     r = retrieve(open_store(get_settings().data_dir), company_id, question)
     best = f"{r.best_distance:.3f}" if r.chunks else "-"
     print(f"\n{company_id}: {question!r}")

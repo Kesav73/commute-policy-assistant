@@ -17,9 +17,12 @@ RUN pip install -r requirements.txt \
 
 USER app
 
-# 2. Bake the embedding model (all-MiniLM-L6-v2, ~80 MB) into the image at BUILD time,
-#    so the first `docker compose up` never waits on a download.
-RUN python -c "from chromadb.utils.embedding_functions import DefaultEmbeddingFunction as E; E()(['warm up'])"
+# 2. Bake the embedding model (nomic-embed-text-v1.5, ~0.5 GB) into the image at BUILD
+#    time, so `docker compose up` never waits on a download. After this step the
+#    container runs fully offline for embeddings (HF_HUB_OFFLINE=1).
+RUN python -c "from fastembed import TextEmbedding as T; from pathlib import Path; \
+list(T('nomic-ai/nomic-embed-text-v1.5', cache_dir=str(Path.home()/'.cache'/'fastembed')).embed(['warm up']))"
+ENV HF_HUB_OFFLINE=1
 
 # 3. Application code (changes most often, so copied last).
 COPY --chown=app:app . .

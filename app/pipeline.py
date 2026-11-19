@@ -109,11 +109,11 @@ def ask(store: PolicyStore, llm: LLM, company_id: str, question: str,
 def main() -> None:
     if len(sys.argv) != 3:
         sys.exit('usage: python -m app.pipeline <company_id> "<question>"')
-    from app.embeddings import embedding_function
+    from app.embeddings import embed_query
     from app.store import open_store
 
     s = get_settings()
-    embedding_function()(["warm up"])
+    embed_query("warm up")
     res = ask(open_store(s.data_dir), build_llm(s), sys.argv[1], sys.argv[2], s)
     print(f"\n[{sys.argv[1]}] {sys.argv[2]}")
     print(f"status   : {res.status}")

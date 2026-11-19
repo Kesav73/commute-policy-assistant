@@ -1,6 +1,5 @@
 """Embedding model benchmark: same chunks, same questions, same scoring - only the embedder changes.
 
-    pip install -r requirements-bench.txt      # fastembed (benchmark only, not in the app image)
     python -m eval.bench_embeddings
 
 Held fixed: sub-section chunks (exactly what the app ingests), Chroma cosine HNSW,
@@ -28,7 +27,6 @@ import numpy as np
 from chromadb.config import Settings as ChromaSettings
 
 from app.config import get_settings
-from app.embeddings import embedding_function
 from app.ingest import load_policies
 from eval.run_retrieval import (CATEGORIES, RESULTS_DIR, load_questions, score_case,
                                 summarise, validate_gold)
@@ -40,13 +38,13 @@ BGE_QUERY = "Represent this sentence for searching relevant passages: "
 @dataclass(frozen=True)
 class Variant:
     label: str
-    model: str            # fastembed model name, or "app" for the app's own MiniLM
+    model: str            # fastembed model name
     query_prefix: str = ""
     passage_prefix: str = ""
 
 
 VARIANTS = [
-    Variant("all-MiniLM-L6-v2 (baseline)", "app"),
+    Variant("all-MiniLM-L6-v2 (baseline)", "sentence-transformers/all-MiniLM-L6-v2"),
     Variant("arctic-embed-s", "snowflake/snowflake-arctic-embed-s"),
     Variant("arctic-embed-s + prefix", "snowflake/snowflake-arctic-embed-s", BGE_QUERY),
     Variant("bge-base-en-v1.5", "BAAI/bge-base-en-v1.5"),
@@ -65,16 +63,12 @@ VARIANTS = [
 
 
 class Embedder:
-    """One interface over the app's MiniLM and fastembed models. Returns unit vectors."""
+    """A fastembed model that returns unit vectors."""
 
     def __init__(self, model: str) -> None:
-        if model == "app":
-            self._fn = embedding_function()
-            self._embed = lambda texts: np.asarray(self._fn(texts), dtype=np.float32)
-        else:
-            from fastembed import TextEmbedding
-            m = TextEmbedding(model_name=model, cache_dir=str(FASTEMBED_CACHE))
-            self._embed = lambda texts: np.asarray(list(m.embed(texts)), dtype=np.float32)
+        from fastembed import TextEmbedding
+        m = TextEmbedding(model_name=model, cache_dir=str(FASTEMBED_CACHE))
+        self._embed = lambda texts: np.asarray(list(m.embed(texts)), dtype=np.float32)
 
     def __call__(self, texts: list[str]) -> np.ndarray:
         v = self._embed(texts)

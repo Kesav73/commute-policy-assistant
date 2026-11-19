@@ -19,7 +19,7 @@ from chromadb.config import Settings as ChromaSettings
 from chromadb.errors import NotFoundError
 
 from app.chunk_store import ChunkStore
-from app.embeddings import EMBEDDING_MODEL, embedding_function
+from app.embeddings import EMBEDDING_ID, embed_documents
 from app.policy_parser import Chunk
 
 COLLECTION_PREFIX = "policy__"
@@ -62,7 +62,7 @@ def index_company(store: PolicyStore, company_id: str, chunks: list[Chunk]) -> i
     if any(c.company_id != company_id for c in chunks):
         raise StoreError(f"chunk from another company passed to {company_id}")
 
-    vectors = embedding_function()([c.text for c in chunks])   # embed BEFORE touching anything
+    vectors = embed_documents([c.text for c in chunks])   # embed BEFORE touching anything
     store.chunks.put(company_id, chunks)
 
     name = collection_name(company_id)
@@ -77,7 +77,7 @@ def index_company(store: PolicyStore, company_id: str, chunks: list[Chunk]) -> i
         # Cosine distance: 0 = same meaning, larger = less related. Easier to reason
         # about (and to set a "not covered" threshold on) than Chroma's default L2.
         configuration={"hnsw": {"space": "cosine"}},
-        metadata={"company_id": company_id, "embedding_model": EMBEDDING_MODEL},
+        metadata={"company_id": company_id, "embedding": EMBEDDING_ID},
     )
     collection.add(ids=[c.id for c in chunks], embeddings=vectors)
 

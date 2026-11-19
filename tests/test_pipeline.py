@@ -13,7 +13,7 @@ from app.pipeline import MAX_LLM_CALLS, ask
 from app.store import open_store
 
 POLICIES = Path(__file__).resolve().parent.parent / "policies"
-Q = "Do women get an escort on late drops?"
+Q = "Does a trained security escort travel with women on night drops?"
 
 
 @pytest.fixture(scope="module")
@@ -60,7 +60,7 @@ def test_same_question_other_company_gets_its_own_rule(store, settings):
 
 def test_gate_answers_not_covered_with_zero_calls(store, settings):
     llm = FakeLLM()
-    r = ask(store, llm, "acme", "What is the capital of France?", settings)
+    r = ask(store, llm, "acme", "Write me a poem about cats", settings)
     assert (r.status, r.answer, r.llm_calls, llm.calls) == ("not_covered", messages.NOT_COVERED, 0, [])
 
 

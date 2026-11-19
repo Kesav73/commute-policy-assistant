@@ -176,8 +176,10 @@ def main() -> None:
             r = retrieve(store, c["company"], c["question"])
             latency_ms = (time.perf_counter() - t0) * 1000
             ranked = [ch.section for ch in r.chunks]
+            distances = [round(ch.distance, 3) for ch in r.chunks]
             leaks = [ch.id for ch in r.chunks if ch.company_id != c["company"]]
             res = score_case(c, ranked, leaks, latency_ms)
+            res["actual"]["distances"] = distances   # for tuning the "not covered" gate
             rows.append({
                 "id": c["id"],
                 "input": {"company": c["company"], "question": c["question"]},

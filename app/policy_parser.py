@@ -15,7 +15,8 @@ from dataclasses import dataclass
 from pathlib import Path
 
 REQUIRED_FIELDS = ("company_id", "doc_id", "title")
-# MiniLM reads ~256 tokens and silently drops the rest; stay well under that.
+# One rule per chunk keeps each vector focused (and was the limit for the earlier MiniLM
+# model, which read only ~256 tokens).
 MAX_CHUNK_WORDS = 180
 
 SECTION_RE = re.compile(r"^##\s+(\d+)\.\s+(\S.*)$")         # "## 4. Night-Shift Safety"

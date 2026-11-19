@@ -1,53 +1,68 @@
-"""Embedding model: all-MiniLM-L6-v2 (ONNX, CPU, 384-dim), same weights as Chroma's default.
+"""Embedding model: nomic-embed-text-v1.5 (ONNX on CPU via fastembed, 768 dims).
 
-Why a subclass instead of Chroma's DefaultEmbeddingFunction as-is:
-Chroma pads EVERY text to 256 tokens. A 12-word question is then processed as
-256 tokens - measured ~440 ms per question on our machine, a big slice of the
-3 s p95 budget (PS.md C1). Here we pad only to the longest text in the batch.
-Padding tokens are masked out of the mean-pooling, so the vectors are the same
-(checked by tests/test_embeddings.py); only the wasted work is removed.
+Chosen by measurement (docs/journey/07-embedding-models.md): on the 90-question gold
+set it lifted recall@1 0.55 -> 0.64 and recall@3 0.82 -> 0.89 over all-MiniLM-L6-v2,
+for ~30 ms more per question. Same library and model files as the benchmark, so the
+app's vectors are exactly the measured ones.
+
+Prefixes (from the model card; the model was trained with them):
+    chunks     "search_document: " + text
+    questions  "search_query: "    + text
+Search is asymmetric - a short question vs a long rule - and the prefix tells the
+model which side it is embedding. Both sides MUST use the same model and the
+matching prefixes, so both live here and nowhere else, and EMBEDDING_ID is recorded
+on every Chroma collection and checked at query time.
 """
-from functools import cached_property, lru_cache
-from typing import Any
+import os
+from functools import lru_cache
+from pathlib import Path
 
 import numpy as np
-from chromadb.utils.embedding_functions.onnx_mini_lm_l6_v2 import ONNXMiniLM_L6_V2
 
-EMBEDDING_MODEL = "all-MiniLM-L6-v2"  # recorded on every collection
-MAX_TOKENS = 256  # sentence-transformers' limit for this model; longer text is cut
+EMBEDDING_MODEL = "nomic-ai/nomic-embed-text-v1.5"
+DOCUMENT_PREFIX = "search_document: "
+QUERY_PREFIX = "search_query: "
+# What a collection records about how its vectors were made. Change any part
+# (model or prefixes) and existing collections no longer match -> re-ingest.
+EMBEDDING_ID = f"{EMBEDDING_MODEL}|{DOCUMENT_PREFIX.strip()}|{QUERY_PREFIX.strip()}"
 
-
-class MiniLMEmbedding(ONNXMiniLM_L6_V2):
-    def __init__(self) -> None:
-        super().__init__(preferred_providers=["CPUExecutionProvider"])
-
-    @cached_property
-    def tokenizer(self) -> Any:
-        tok = super().tokenizer
-        tok.enable_truncation(max_length=MAX_TOKENS)
-        tok.enable_padding(pad_id=0, pad_token="[PAD]")  # pad to longest in batch, not to 256
-        return tok
-
-    def _forward(self, documents: list[str], batch_size: int = 32) -> np.ndarray:
-        out = []
-        for i in range(0, len(documents), batch_size):
-            encoded = self.tokenizer.encode_batch(documents[i:i + batch_size])
-            ids = np.array([e.ids for e in encoded], dtype=np.int64)
-            mask = np.array([e.attention_mask for e in encoded], dtype=np.int64)
-            hidden = self.model.run(None, {
-                "input_ids": ids,
-                "attention_mask": mask,
-                "token_type_ids": np.zeros_like(ids),
-            })[0]
-            # Mean of the real (unmasked) token vectors, then unit length -> cosine-ready.
-            m = mask[..., None].astype(np.float32)
-            pooled = (hidden * m).sum(axis=1) / np.clip(m.sum(axis=1), 1e-9, None)
-            out.append(self._normalize(pooled).astype(np.float32))
-        return np.concatenate(out)
+# Model files live here. The Docker image downloads them at BUILD time, so a running
+# container never needs the network for embeddings.
+CACHE_DIR = Path(os.getenv("EMBEDDING_CACHE_DIR", Path.home() / ".cache" / "fastembed"))
 
 
 @lru_cache
-def embedding_function() -> MiniLMEmbedding:
-    """The single shared instance. The SAME function embeds chunks at ingest and
-    questions at query time; vectors from different models are not comparable."""
-    return MiniLMEmbedding()
+def _model():
+    """Load once per process (~1 s), then reuse. Import is lazy so tests that never
+    embed don't pay for it."""
+    from fastembed import TextEmbedding
+    return TextEmbedding(model_name=EMBEDDING_MODEL, cache_dir=str(CACHE_DIR))
+
+
+def _embed(texts: list[str]) -> np.ndarray:
+    v = np.asarray(list(_model().embed(texts)), dtype=np.float32)
+    return v / np.linalg.norm(v, axis=1, keepdims=True)   # unit length -> cosine-ready
+
+
+# Chunk vectors already computed in this process, keyed by chunk text. Re-ingesting an
+# unchanged policy (a restart-free re-ingest, every test that ingests, the eval) then
+# skips the model. Bounded so a long-running process can't grow it without limit.
+_DOC_CACHE: dict[str, np.ndarray] = {}
+_DOC_CACHE_MAX = 5000
+
+
+def embed_documents(texts: list[str]) -> np.ndarray:
+    """Chunks at ingest time."""
+    missing = list(dict.fromkeys(t for t in texts if t not in _DOC_CACHE))
+    if missing:
+        for t, v in zip(missing, _embed([DOCUMENT_PREFIX + t for t in missing])):
+            if len(_DOC_CACHE) < _DOC_CACHE_MAX:
+                _DOC_CACHE[t] = v
+            else:
+                return _embed([DOCUMENT_PREFIX + t for t in texts])   # cache full: just embed
+    return np.stack([_DOC_CACHE[t] for t in texts])
+
+
+def embed_query(text: str) -> np.ndarray:
+    """One question at ask time. Shape (1, 768)."""
+    return _embed([QUERY_PREFIX + text])
