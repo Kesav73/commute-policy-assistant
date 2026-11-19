@@ -15,6 +15,9 @@ Metrics, over answerable questions only (required is non-empty):
               averaged over questions. For a question that needs 2 sections,
               recall@1 can be at most 0.5, by definition.
     pass      recall@3 == 1 (every required section is in the top 3)
+Latency, over all questions:
+    avg latency  mean wall time of retrieve(): embed the question + Chroma search,
+                 in ms, measured after one warm-up query (model load not counted)
 
 Not-covered questions have nothing to recall, so they are listed but not scored.
 Safety invariant (not a metric): a chunk from another company must never be
@@ -84,10 +87,10 @@ def recall_at(k: int, required: list[str], ranked: list[str]) -> float:
     return sum(s in ranked[:k] for s in required) / len(required)
 
 
-def score_case(case: dict, ranked: list[str], leaks: list[str]) -> dict:
+def score_case(case: dict, ranked: list[str], leaks: list[str], latency_ms: float) -> dict:
     """ranked: section ids in retrieval order. Returns actual, pass, notes."""
     required = case["required"]
-    actual = {"retrieved": ranked, "leaks": leaks}
+    actual = {"retrieved": ranked, "leaks": leaks, "latency_ms": round(latency_ms, 2)}
     notes = []
     if required:
         for k in KS:
@@ -117,6 +120,7 @@ def block(rows: list[dict]) -> dict:
            "pass": sum(r["pass"] for r in ans)}
     for k in KS:
         out[f"recall_at_{k}"] = mean(r["actual"][f"recall_at_{k}"] for r in ans)
+    out["avg_latency_ms"] = mean(r["actual"]["latency_ms"] for r in rows)
     out["leaks"] = sum(len(r["actual"]["leaks"]) for r in rows)
     return out
 
@@ -136,7 +140,8 @@ def summarise(rows: list[dict]) -> dict:
 # ---------------------------------------------------------------- report --
 
 def print_scorecard(summary: dict) -> None:
-    head = f"{'':16}{'answerable':>11}{'pass':>9}{'recall@1':>10}{'recall@3':>10}{'leaks':>7}"
+    head = (f"{'':16}{'answerable':>11}{'pass':>9}{'recall@1':>10}{'recall@3':>10}"
+            f"{'avg ms':>9}{'leaks':>7}")
 
     def fmt(x):
         return "    -" if x is None else f"{x:5.2f}"
@@ -144,7 +149,7 @@ def print_scorecard(summary: dict) -> None:
     def line(name, b):
         p = f"{b['pass']}/{b['answerable']}" if b["answerable"] else "-"
         return (f"{name:16}{b['answerable']:>11}{p:>9}{fmt(b['recall_at_1']):>10}"
-                f"{fmt(b['recall_at_3']):>10}{b['leaks']:>7}")
+                f"{fmt(b['recall_at_3']):>10}{b['avg_latency_ms']:>9.1f}{b['leaks']:>7}")
 
     print("\n" + "=" * len(head) + "\nRETRIEVAL SCORECARD\n" + "=" * len(head))
     print(head)
@@ -164,12 +169,15 @@ def main() -> None:
     with tempfile.TemporaryDirectory() as tmp:
         client = get_client(Path(tmp))
         ingest_all(client, s.policies_dir)
+        retrieve(client, cases[0]["company"], "warm up")   # load the model before timing
         rows = []
         for c in cases:
+            t0 = time.perf_counter()
             r = retrieve(client, c["company"], c["question"])
+            latency_ms = (time.perf_counter() - t0) * 1000
             ranked = [ch.section for ch in r.chunks]
             leaks = [ch.id for ch in r.chunks if ch.company_id != c["company"]]
-            res = score_case(c, ranked, leaks)
+            res = score_case(c, ranked, leaks, latency_ms)
             rows.append({
                 "id": c["id"],
                 "input": {"company": c["company"], "question": c["question"]},

@@ -317,7 +317,7 @@ For `not_covered`, the employee always sees our fixed message from `messages.py`
 
 **Files:** `eval/questions.jsonl` (90 gold cases, written by hand from POLICY_MATRIX) → `python -m eval.run_retrieval` → `eval/results/retrieval.jsonl` (required format) + a printed scorecard.
 
-**Current status:** only the retrieval stage is scored, with two metrics: **recall@1** and **recall@3** (share of the gold `required` sections found in the top 1 / top 3). End-to-end answer scoring and latency benchmarks will be rebuilt in a more structured way; the design below is the target.
+**Current status:** only the retrieval stage is scored, with three metrics: **recall@1** and **recall@3** (share of the gold `required` sections found in the top 1 / top 3) and **average latency** (embed + search, ms). End-to-end answer scoring and latency benchmarks will be rebuilt in a more structured way; the design below is the target.
 
 **Gold case** (internal fields):
 ```json
@@ -363,7 +363,7 @@ app/
   messages.py      every user-facing string
 eval/
   questions.jsonl  90 hand-labelled gold cases
-  run_retrieval.py retrieval scorecard (recall@1, recall@3)   results/  committed scorecards
+  run_retrieval.py retrieval scorecard (recall@1, recall@3, avg latency)   results/  committed scorecards
 tests/  test_auth · test_policy_parser · test_ingest · test_retriever · test_eval_gold
         test_llm · test_answerer · test_pipeline · test_api
 policies/  sample_data/  docs/

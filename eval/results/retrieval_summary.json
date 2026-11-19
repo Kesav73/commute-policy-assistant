@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-19 20:53:27",
+  "generated_at": "2026-11-19 20:58:23",
   "top_k": 3,
   "overall": {
     "n": 90,
@@ -7,6 +7,7 @@
     "pass": 56,
     "recall_at_1": 0.547,
     "recall_at_3": 0.818,
+    "avg_latency_ms": 5.109,
     "leaks": 0
   },
   "by_category": {
@@ -16,6 +17,7 @@
       "pass": 16,
       "recall_at_1": 0.778,
       "recall_at_3": 0.917,
+      "avg_latency_ms": 4.422,
       "leaks": 0
     },
     "paraphrase": {
@@ -24,6 +26,7 @@
       "pass": 19,
       "recall_at_1": 0.562,
       "recall_at_3": 0.812,
+      "avg_latency_ms": 5.374,
       "leaks": 0
     },
     "same_section": {
@@ -32,6 +35,7 @@
       "pass": 8,
       "recall_at_1": 0.417,
       "recall_at_3": 0.9,
+      "avg_latency_ms": 4.579,
       "leaks": 0
     },
     "multi_hop": {
@@ -40,6 +44,7 @@
       "pass": 6,
       "recall_at_1": 0.333,
       "recall_at_3": 0.718,
+      "avg_latency_ms": 6.21,
       "leaks": 0
     },
     "edge": {
@@ -48,6 +53,7 @@
       "pass": 3,
       "recall_at_1": 0.4,
       "recall_at_3": 0.6,
+      "avg_latency_ms": 4.232,
       "leaks": 0
     },
     "cross_company": {
@@ -56,6 +62,7 @@
       "pass": 3,
       "recall_at_1": 0.667,
       "recall_at_3": 1.0,
+      "avg_latency_ms": 4.615,
       "leaks": 0
     },
     "injection": {
@@ -64,6 +71,7 @@
       "pass": 1,
       "recall_at_1": 0.5,
       "recall_at_3": 0.5,
+      "avg_latency_ms": 5.77,
       "leaks": 0
     },
     "not_covered": {
@@ -72,6 +80,7 @@
       "pass": 0,
       "recall_at_1": null,
       "recall_at_3": null,
+      "avg_latency_ms": 5.275,
       "leaks": 0
     }
   },
@@ -82,6 +91,7 @@
       "pass": 17,
       "recall_at_1": 0.573,
       "recall_at_3": 0.76,
+      "avg_latency_ms": 4.85,
       "leaks": 0
     },
     "bolt": {
@@ -90,6 +100,7 @@
       "pass": 21,
       "recall_at_1": 0.545,
       "recall_at_3": 0.859,
+      "avg_latency_ms": 5.472,
       "leaks": 0
     },
     "crest": {
@@ -98,6 +109,7 @@
       "pass": 18,
       "recall_at_1": 0.521,
       "recall_at_3": 0.833,
+      "avg_latency_ms": 5.003,
       "leaks": 0
     }
   }
