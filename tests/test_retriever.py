@@ -45,7 +45,8 @@ def test_unknown_company_gets_nothing(store):
     assert r.chunks == [] and r.has_evidence is False
 
 
-def test_foreign_chunk_in_collection_is_dropped(tmp_path, caplog):
+@pytest.mark.parametrize("mode", ["vector", "hybrid"])
+def test_foreign_chunk_in_collection_is_dropped(tmp_path, caplog, mode):
     """Simulate a bug that puts Bolt's 4.1 vector into Acme's collection: it must never come back."""
     from app.embeddings import embed_documents
     client = open_store(tmp_path / "data")
@@ -53,7 +54,7 @@ def test_foreign_chunk_in_collection_is_dropped(tmp_path, caplog):
     bolt_41 = client.chunks.get("bolt", "bolt-commute-policy:4.1")
     get_company_collection(client, "acme").add(
         ids=[bolt_41.id], embeddings=embed_documents([bolt_41.text]))
-    r = retrieve(client, "acme", bolt_41.text)   # the planted vector is the nearest match
+    r = retrieve(client, "acme", bolt_41.text, mode=mode)   # the planted vector is the nearest match
     assert bolt_41.id not in [c.id for c in r.chunks]
     assert all(c.company_id == "acme" for c in r.chunks)
     assert "ISOLATION ALERT" in caplog.text
@@ -74,7 +75,7 @@ def test_result_carries_citation_fields_and_timings(store):
     r = retrieve(store, "crest", "Who approves weekend transport?")
     c = r.chunks[0]
     assert c.doc_id == "crest-transport-guidelines" and c.section and c.section_title
-    assert set(r.timings_ms) == {"embed", "search"}
+    assert {"embed", "search"} <= set(r.timings_ms)
 
 
 # ------------------------------------------------------ obvious matches --

@@ -1,13 +1,14 @@
 {
-  "generated_at": "2026-11-20 02:38:06",
+  "generated_at": "2026-11-20 02:50:41",
   "top_k": 3,
+  "mode": "hybrid",
   "overall": {
     "n": 90,
     "answerable": 75,
-    "pass": 64,
-    "recall_at_1": 0.64,
-    "recall_at_3": 0.891,
-    "avg_latency_ms": 27.576,
+    "pass": 66,
+    "recall_at_1": 0.627,
+    "recall_at_3": 0.922,
+    "avg_latency_ms": 42.121,
     "leaks": 0
   },
   "by_category": {
@@ -17,16 +18,16 @@
       "pass": 18,
       "recall_at_1": 0.75,
       "recall_at_3": 1.0,
-      "avg_latency_ms": 23.566,
+      "avg_latency_ms": 32.448,
       "leaks": 0
     },
     "paraphrase": {
       "n": 24,
       "answerable": 24,
-      "pass": 22,
-      "recall_at_1": 0.854,
-      "recall_at_3": 0.917,
-      "avg_latency_ms": 29.381,
+      "pass": 23,
+      "recall_at_1": 0.812,
+      "recall_at_3": 0.958,
+      "avg_latency_ms": 48.453,
       "leaks": 0
     },
     "same_section": {
@@ -34,17 +35,17 @@
       "answerable": 10,
       "pass": 9,
       "recall_at_1": 0.417,
-      "recall_at_3": 0.9,
-      "avg_latency_ms": 28.614,
+      "recall_at_3": 0.95,
+      "avg_latency_ms": 49.796,
       "leaks": 0
     },
     "multi_hop": {
       "n": 13,
       "answerable": 13,
-      "pass": 7,
+      "pass": 8,
       "recall_at_1": 0.372,
-      "recall_at_3": 0.756,
-      "avg_latency_ms": 35.864,
+      "recall_at_3": 0.821,
+      "avg_latency_ms": 53.126,
       "leaks": 0
     },
     "edge": {
@@ -53,7 +54,7 @@
       "pass": 4,
       "recall_at_1": 0.8,
       "recall_at_3": 0.8,
-      "avg_latency_ms": 21.144,
+      "avg_latency_ms": 29.72,
       "leaks": 0
     },
     "cross_company": {
@@ -62,7 +63,7 @@
       "pass": 3,
       "recall_at_1": 0.333,
       "recall_at_3": 1.0,
-      "avg_latency_ms": 23.02,
+      "avg_latency_ms": 33.333,
       "leaks": 0
     },
     "injection": {
@@ -71,7 +72,7 @@
       "pass": 1,
       "recall_at_1": 0.0,
       "recall_at_3": 0.5,
-      "avg_latency_ms": 29.102,
+      "avg_latency_ms": 42.16,
       "leaks": 0
     },
     "not_covered": {
@@ -80,7 +81,7 @@
       "pass": 0,
       "recall_at_1": null,
       "recall_at_3": null,
-      "avg_latency_ms": 23.989,
+      "avg_latency_ms": 33.808,
       "leaks": 0
     }
   },
@@ -88,28 +89,28 @@
     "acme": {
       "n": 30,
       "answerable": 25,
-      "pass": 19,
+      "pass": 20,
       "recall_at_1": 0.573,
-      "recall_at_3": 0.84,
-      "avg_latency_ms": 32.371,
+      "recall_at_3": 0.88,
+      "avg_latency_ms": 42.149,
       "leaks": 0
     },
     "bolt": {
       "n": 30,
       "answerable": 26,
       "pass": 23,
-      "recall_at_1": 0.718,
-      "recall_at_3": 0.897,
-      "avg_latency_ms": 25.931,
+      "recall_at_1": 0.679,
+      "recall_at_3": 0.929,
+      "avg_latency_ms": 40.911,
       "leaks": 0
     },
     "crest": {
       "n": 30,
       "answerable": 24,
-      "pass": 22,
+      "pass": 23,
       "recall_at_1": 0.625,
-      "recall_at_3": 0.938,
-      "avg_latency_ms": 24.426,
+      "recall_at_3": 0.958,
+      "avg_latency_ms": 43.302,
       "leaks": 0
     }
   }

@@ -74,7 +74,7 @@ An HTTP service where an employee, identified by a JWT, asks a question about co
 | Vector store | **Chroma, embedded** (`PersistentClient`) | Required; embedded = no extra container → fewer things to break in `docker compose up` | Chroma server container (more realistic, more moving parts) |
 | Embeddings | **nomic-embed-text-v1.5 (ONNX via fastembed), with `search_query:` / `search_document:` prefixes** | Chosen by benchmark (journey 07): recall@1 0.64 / recall@3 0.89 vs MiniLM's 0.55 / 0.82, ~35 ms per query; free, local, no PyTorch; baked into the image, runs offline | all-MiniLM-L6-v2 (former default: faster, smaller, less accurate), bge-large (ties, 2–3× cost), hosted embedding APIs (network call, quota, latency) |
 | LLM | **Groq: `qwen/qwen3.8-27b` primary, `openai/gpt-oss-120b` fallback**; **Fake** (tests/offline) | Benchmarked on Groq with real prompts: Qwen p95 0.4–0.7 s and resisted the planted injection; gpt-oss-120b p95 0.94 s, a separate model with its own rate limits; gpt-oss-20b once obeyed the injection. Groq = fastest free tier. One OpenAI-compatible client, swap by env var | Gemini free Flash (~20 req/day, too low), local Ollama (slow on CPU, hurts C1) |
-| Bonus retrieval | **BM25 (`rank_bm25`) + vector, fused with RRF** | Cheap, explainable, helps exact terms ("no-show", "Saturday") | Cross-encoder rerank (slower), query rewrite (costs our 2nd LLM call) |
+| Bonus retrieval | **Stemmed BM25 (own ~60 lines) + vector, weighted RRF 2:1** | Cheap (<0.5 ms), explainable, helps exact terms and multi-hop: recall@3 0.89 → 0.92 (journey 09) | Cross-encoder rerank (slower), query rewrite (costs our 2nd LLM call) |
 | Tests | **pytest + FakeLLM** | G2: no quota or network needed | — |
 | Packaging | **Docker Compose**, one service | D2: one command | — |
 | **Not used** | LangChain / LlamaIndex | The pipeline is ~6 steps; direct code is shorter and every line is explainable in the viva (G4, G7) | — |
@@ -356,7 +356,9 @@ Judging is **deterministic string and section checks, not an LLM judge**. That m
 ---
 
 ## 12. Bonus: hybrid retrieval (B1–B3)
-`RETRIEVAL_MODE=vector|hybrid`. Hybrid = BM25 over the same company collection's chunks plus vector top-k, fused with Reciprocal Rank Fusion, keeping top 3. The BM25 index is built per company, in memory, at startup. We run the same eval in both modes and report hit@3, MRR, answer accuracy and p95 before and after, plus the added lines of code.
+**Implemented (journey 09).** `RETRIEVAL_MODE=hybrid` (default) or `vector`. Hybrid = stemmed BM25 (`app/bm25.py`) over the same company's chunks from the chunk store, plus vector ranking of all the company's chunks, fused with weighted Reciprocal Rank Fusion (vector 2 : keyword 1, k = 60), keeping the top 3. Every vector candidate is validated against the company's chunk store before fusion. The evidence gate still uses the best vector distance.
+
+Measured on the 75 answerable gold questions: recall@3 0.89 → 0.92, pass 64 → 66, multi-hop recall@3 0.76 → 0.82, recall@1 0.64 → 0.63; cost < 0.5 ms and ~85 lines. Without stemming, hybrid was worse than vectors alone (61/75).
 
 ---
 
@@ -371,7 +373,8 @@ app/
   chunk_store.py   chunk content (id → text + metadata), one JSONL per company
   store.py         Chroma: ids + vectors, one collection per company
   ingest.py        parse → chunk store + embed → Chroma; startup seeding
-  retriever.py     vector search, company re-check, evidence gate
+  bm25.py          stemmed BM25 keyword index per company
+  retriever.py     vector + BM25 (hybrid, RRF), company re-check, evidence gate
   llm.py           OpenAI-compatible client (Groq) + FakeLLM
   answerer.py      prompt + output validation + label→citation mapping
   pipeline.py      the ask flow: budgets, deadline, fallback

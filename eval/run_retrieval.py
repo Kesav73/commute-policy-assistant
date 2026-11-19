@@ -191,8 +191,10 @@ def main() -> None:
     RESULTS_DIR.mkdir(exist_ok=True)
     (RESULTS_DIR / "retrieval.jsonl").write_text("\n".join(json.dumps(r) for r in rows) + "\n")
     (RESULTS_DIR / "retrieval_summary.json").write_text(json.dumps(
-        {"generated_at": time.strftime("%Y-%m-%d %H:%M:%S"), "top_k": TOP_K, **summary}, indent=2))
+        {"generated_at": time.strftime("%Y-%m-%d %H:%M:%S"), "top_k": TOP_K,
+         "mode": s.retrieval_mode, **summary}, indent=2))
 
+    print(f"\nretrieval mode: {s.retrieval_mode}   (set RETRIEVAL_MODE=vector|hybrid)")
     print_scorecard(summary)
     failures = [r for r in rows if not r["pass"]]
     print(f"\nfailed cases ({len(failures)}):")

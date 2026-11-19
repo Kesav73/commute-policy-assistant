@@ -20,7 +20,7 @@ A running log of every experiment and improvement: what we tried, how we measure
 
 | Configuration | recall@1 | recall@3 | avg latency | Entry |
 |---|---|---|---|---|
-| Sub-section chunks + nomic-embed-text-v1.5 (with prefixes), top 3, cosine; separate chunk store | 0.64 | 0.89 | ~33 ms | [08](08-switch-to-nomic.md) |
+| Sub-section chunks + nomic-embed-text-v1.5 (with prefixes) + stemmed BM25, weighted RRF 2:1, top 3 | 0.63 | 0.92 | ~40 ms (hybrid adds <0.5 ms) | [09](09-hybrid-search.md) |
 
 ## Index
 
@@ -34,3 +34,4 @@ A running log of every experiment and improvement: what we tried, how we measure
 | 06 | 2026-11-19 | [Separate chunk store](06-separate-chunk-store.md) | Chroma holds ids + vectors only; same recall, ~10% faster |
 | 07 | 2026-11-20 | [Embedding models](07-embedding-models.md) | nomic-embed-text-v1.5 best value: recall@1 0.64, recall@3 0.89 (+8 questions), ~35 ms; bge-large ties at 2–3× the cost; switched in 08 |
 | 08 | 2026-11-20 | [Switch the app to nomic](08-switch-to-nomic.md) | App now 0.64 / 0.89; gate re-tuned 0.75 → 0.50; image 1.9 GB, RAM ~1.28 GB |
+| 09 | 2026-11-20 | [Hybrid search](09-hybrid-search.md) | Stemmed BM25 + vectors (2:1 RRF): recall@3 0.89 → 0.92, 64 → 66, multi-hop 0.76 → 0.82, <0.5 ms; plain hybrid was worse |

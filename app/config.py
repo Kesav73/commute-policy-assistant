@@ -38,6 +38,7 @@ class Settings:
     data_dir: Path
     policies_dir: Path
     retrieval_max_distance: float
+    retrieval_mode: str        # "vector" | "hybrid"
     llm_provider: str          # "groq" | "fake"
     llm_model: str             # primary
     llm_fallback_model: str    # used for the 2nd (and last) call
@@ -93,6 +94,9 @@ def get_settings() -> Settings:
         # 0.50 = the tightest value that blocks none of the 75 answerable gold questions
         # with nomic-embed-text-v1.5 (worst real one: 0.489). See docs/journey/08.
         retrieval_max_distance=float(os.getenv("RETRIEVAL_MAX_DISTANCE", "0.50")),
+        # hybrid (default) = embeddings + stemmed BM25 keywords, fused with weighted RRF;
+        # vector = embeddings only. See docs/journey/09.
+        retrieval_mode=_retrieval_mode(),
         **_llm_settings(),
     )
 
@@ -103,6 +107,13 @@ LLM_DEFAULTS = {
     "groq": ("qwen/qwen3.8-27b", "openai/gpt-oss-120b", "GROQ_API_KEY"),
     "fake": ("fake-primary", "fake-fallback", ""),
 }
+
+
+def _retrieval_mode() -> str:
+    mode = os.getenv("RETRIEVAL_MODE", "hybrid").strip().lower()
+    if mode not in ("vector", "hybrid"):
+        raise ConfigError(f"RETRIEVAL_MODE must be 'vector' or 'hybrid', got {mode!r}")
+    return mode
 
 
 def _llm_settings() -> dict:
