@@ -77,6 +77,21 @@ nomic fixes acme-06, acme-08, acme-09, bolt-21, bolt-30, crest-01, crest-09 and 
 - **Cost of nomic:** query embedding goes from ~5 ms to ~35 ms. The Docker image grows by about 0.5 GB. The app gains a dependency (fastembed). The gate gap halves (0.21 → 0.11), so the evidence gate must be re-tuned after switching.
 - **Caveat:** the winner was picked on the same 75 questions we report on. That's acceptable for choosing among 4 models, but the number may be slightly optimistic. A synthetic dev set (TODO) would fix this.
 
+## Scope: why only these four, and not bigger or smaller models
+Four models was a deliberate limit, chosen for variety (family, size 22M–137M, input style) rather than size. The limits that shaped it:
+1. **Local, CPU, free.** The question is embedded on every request, inside the 3 s budget, on the reviewer's machine. A hosted embedding API would add a network call and a second quota to every question.
+2. **The model ships in the Docker image.** MiniLM is 0.09 GB; large models are 1–2.4 GB, which means a slower build and a heavier start for the reviewer.
+3. **Available in fastembed** (ONNX, no PyTorch). This is why e5-small-v2 dropped out.
+
+Not tested:
+
+| Group | Examples | Expected trade-off |
+|---|---|---|
+| Smaller | potion-base-8M (static, ~0.1 ms), arctic-embed-xs | Faster than MiniLM, usually less accurate; latency is already not a problem |
+| Larger | bge-large, mxbai-embed-large, embeddinggemma-300m, Qwen3-Embedding-0.6B | Often better on public benchmarks; ~100–300 ms per question on CPU, 0.6–2.4 GB |
+
+**Why bigger models are unlikely to change the picture:** of the 11 questions nomic still misses, 6 need two or three *different* sections in the top 3 (acme-18/19/20, bolt-19, bolt-20, crest-16). One question vector can't sit close to several unrelated chunks at once, whatever the model. These need a retrieval technique (hybrid search, re-ranking, parent-section context), which are the next experiments. Expected gain from a large model: 1–3 questions at 5–10× the latency and image size. That's an estimate, not a measurement; an extended sweep can be run with the same harness if needed.
+
 ## Decision
 **Recommended:** nomic-embed-text-v1.5, full precision, with its prefixes. It's the best on both recall metrics, and the extra ~30 ms is negligible against the 3 s budget.
 
