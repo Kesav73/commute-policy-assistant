@@ -15,3 +15,6 @@ data/
 
 # Offline (FakeLLM) eval runs are plumbing checks, regenerated on demand
 eval/results/*_offline*
+
+# Private planning notes (not part of the submission)
+TODO.md
