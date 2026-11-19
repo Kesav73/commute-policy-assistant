@@ -12,3 +12,6 @@ __pycache__/
 
 # Runtime data (vector store, registry DB)
 data/
+
+# Offline (FakeLLM) eval runs are plumbing checks, regenerated on demand
+eval/results/*_offline*

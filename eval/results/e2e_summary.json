@@ -1,0 +1,190 @@
+{
+  "generated_at": "2026-11-19 10:42:00",
+  "llm_provider": "groq",
+  "models": [
+    "qwen/qwen3.8-27b",
+    "openai/gpt-oss-120b"
+  ],
+  "run_seconds": 712,
+  "overall": {
+    "n": 90,
+    "pass": 72,
+    "status_correct": 81,
+    "facts_correct": 60,
+    "answered_expected": 75,
+    "citation_correct": 63,
+    "forbidden_hits": 0,
+    "leaks": 0
+  },
+  "by_category": {
+    "direct": {
+      "n": 18,
+      "pass": 15,
+      "status_correct": 17,
+      "facts_correct": 15,
+      "answered_expected": 18,
+      "citation_correct": 17,
+      "forbidden_hits": 0,
+      "leaks": 0
+    },
+    "paraphrase": {
+      "n": 24,
+      "pass": 20,
+      "status_correct": 22,
+      "facts_correct": 22,
+      "answered_expected": 24,
+      "citation_correct": 20,
+      "forbidden_hits": 0,
+      "leaks": 0
+    },
+    "same_section": {
+      "n": 10,
+      "pass": 8,
+      "status_correct": 10,
+      "facts_correct": 8,
+      "answered_expected": 10,
+      "citation_correct": 10,
+      "forbidden_hits": 0,
+      "leaks": 0
+    },
+    "multi_hop": {
+      "n": 13,
+      "pass": 9,
+      "status_correct": 11,
+      "facts_correct": 9,
+      "answered_expected": 13,
+      "citation_correct": 11,
+      "forbidden_hits": 0,
+      "leaks": 0
+    },
+    "edge": {
+      "n": 5,
+      "pass": 3,
+      "status_correct": 4,
+      "facts_correct": 4,
+      "answered_expected": 5,
+      "citation_correct": 3,
+      "forbidden_hits": 0,
+      "leaks": 0
+    },
+    "cross_company": {
+      "n": 6,
+      "pass": 5,
+      "status_correct": 5,
+      "facts_correct": 2,
+      "answered_expected": 3,
+      "citation_correct": 2,
+      "forbidden_hits": 0,
+      "leaks": 0
+    },
+    "injection": {
+      "n": 4,
+      "pass": 2,
+      "status_correct": 2,
+      "facts_correct": 0,
+      "answered_expected": 2,
+      "citation_correct": 0,
+      "forbidden_hits": 0,
+      "leaks": 0
+    },
+    "not_covered": {
+      "n": 10,
+      "pass": 10,
+      "status_correct": 10,
+      "facts_correct": 0,
+      "answered_expected": 0,
+      "citation_correct": 0,
+      "forbidden_hits": 0,
+      "leaks": 0
+    }
+  },
+  "by_company": {
+    "acme": {
+      "n": 30,
+      "pass": 22,
+      "status_correct": 28,
+      "facts_correct": 19,
+      "answered_expected": 25,
+      "citation_correct": 21,
+      "forbidden_hits": 0,
+      "leaks": 0
+    },
+    "bolt": {
+      "n": 30,
+      "pass": 24,
+      "status_correct": 26,
+      "facts_correct": 21,
+      "answered_expected": 26,
+      "citation_correct": 21,
+      "forbidden_hits": 0,
+      "leaks": 0
+    },
+    "crest": {
+      "n": 30,
+      "pass": 26,
+      "status_correct": 27,
+      "facts_correct": 20,
+      "answered_expected": 24,
+      "citation_correct": 21,
+      "forbidden_hits": 0,
+      "leaks": 0
+    }
+  },
+  "by_difficulty": {
+    "easy": {
+      "n": 18,
+      "pass": 15,
+      "status_correct": 17,
+      "facts_correct": 15,
+      "answered_expected": 18,
+      "citation_correct": 17,
+      "forbidden_hits": 0,
+      "leaks": 0
+    },
+    "medium": {
+      "n": 40,
+      "pass": 34,
+      "status_correct": 38,
+      "facts_correct": 29,
+      "answered_expected": 33,
+      "citation_correct": 29,
+      "forbidden_hits": 0,
+      "leaks": 0
+    },
+    "hard": {
+      "n": 32,
+      "pass": 23,
+      "status_correct": 26,
+      "facts_correct": 16,
+      "answered_expected": 24,
+      "citation_correct": 17,
+      "forbidden_hits": 0,
+      "leaks": 0
+    }
+  },
+  "confusion": {
+    "answered->answered": 66,
+    "answered->not_covered": 9,
+    "not_covered->not_covered": 15
+  },
+  "llm_calls": {
+    "1": 89,
+    "2": 1
+  },
+  "max_llm_calls": 2,
+  "max_citations": 3,
+  "latency_ms_all": {
+    "p50": 435.9,
+    "p95": 829.3,
+    "max": 1310.5
+  },
+  "latency_ms_with_llm": {
+    "p50": 435.9,
+    "p95": 829.3,
+    "max": 1310.5
+  },
+  "models_used": {
+    "qwen/qwen3.8-27b": 90,
+    "openai/gpt-oss-120b": 1
+  }
+}
