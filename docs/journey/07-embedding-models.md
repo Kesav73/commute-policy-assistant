@@ -92,7 +92,24 @@ Not tested:
 
 **Why bigger models are unlikely to change the picture:** of the 11 questions nomic still misses, 6 need two or three *different* sections in the top 3 (acme-18/19/20, bolt-19, bolt-20, crest-16). One question vector can't sit close to several unrelated chunks at once, whatever the model. These need a retrieval technique (hybrid search, re-ranking, parent-section context), which are the next experiments. Expected gain from a large model: 1–3 questions at 5–10× the latency and image size. That's an estimate, not a measurement; an extended sweep can be run with the same harness if needed.
 
+## Follow-up: one large model (bge-large-en-v1.5)
+To test "would a bigger model win?" instead of guessing, we ran bge-large-en-v1.5: the same family as bge-base, 3× larger (335M parameters, 1024 dims, 1.2 GB).
+
+| Variant | recall@1 | recall@3 | avg latency | pass (75) | size |
+|---|---|---|---|---|---|
+| bge-base-en-v1.5 + prefix | 0.57 | 0.87 | 25–35 ms | 61 | 0.21 GB |
+| bge-large-en-v1.5 | **0.65** | **0.89** | 68–73 ms | 63 | 1.2 GB |
+| bge-large-en-v1.5 + prefix | 0.63 | 0.88 | 80–111 ms | 62 | 1.2 GB |
+| **nomic-embed-v1.5 + prefix** | 0.64 | **0.89** | 31–40 ms | **64** | 0.52 GB |
+
+- **Within the bge family, size helps:** base → large gains +2 questions and +0.08 recall@1.
+- **Against nomic it's a tie:** same recall@3, recall@1 +0.01 (one question), pass −1. bge-large fixes acme-14 and acme-30 (paraphrase, typo) that nomic misses; nomic gets acme-21, crest-16 and crest-29 that bge-large misses. A difference of one or two questions is noise on a 75-question set.
+- **It costs 2–3× nomic:** ~70 ms against ~35 ms per question, a 1.2 GB model against 0.52 GB, and 17–22 s to index 71 chunks against ~7 s.
+- **Its prefix hurts slightly here** (−1 question), unlike bge-base.
+
+This matches the estimate above: a large model wins back 0–2 questions at several times the cost. The remaining misses are multi-section questions that embeddings alone don't fix.
+
 ## Decision
-**Recommended:** nomic-embed-text-v1.5, full precision, with its prefixes. It's the best on both recall metrics, and the extra ~30 ms is negligible against the 3 s budget.
+**Recommended:** nomic-embed-text-v1.5, full precision, with its prefixes. It ties for best on both recall metrics with bge-large at half the latency and less than half the size, and the extra ~30 ms over MiniLM is negligible against the 3 s budget.
 
 **Status:** benchmark recorded. The app still runs MiniLM until the switch is made and verified, which needs a new embedding module, the Docker image updated, the gate re-tuned and the eval re-run.

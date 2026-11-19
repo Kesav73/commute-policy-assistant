@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-20 00:07:20",
+  "generated_at": "2026-11-20 02:22:30",
   "variants": [
     {
       "label": "all-MiniLM-L6-v2 (baseline)",
@@ -7,7 +7,7 @@
       "query_prefix": "",
       "passage_prefix": "",
       "load_s": 0.03,
-      "index_s": 0.9,
+      "index_s": 0.88,
       "gap": 0.209,
       "best_distance_answerable": 0.437,
       "best_distance_not_covered": 0.646,
@@ -17,7 +17,7 @@
         "pass": 56,
         "recall_at_1": 0.547,
         "recall_at_3": 0.818,
-        "avg_latency_ms": 3.248,
+        "avg_latency_ms": 4.233,
         "leaks": 0
       },
       "by_category": {
@@ -27,7 +27,7 @@
           "pass": 16,
           "recall_at_1": 0.778,
           "recall_at_3": 0.917,
-          "avg_latency_ms": 3.302,
+          "avg_latency_ms": 4.712,
           "leaks": 0
         },
         "paraphrase": {
@@ -36,7 +36,7 @@
           "pass": 19,
           "recall_at_1": 0.562,
           "recall_at_3": 0.812,
-          "avg_latency_ms": 3.29,
+          "avg_latency_ms": 4.201,
           "leaks": 0
         },
         "same_section": {
@@ -45,7 +45,7 @@
           "pass": 8,
           "recall_at_1": 0.417,
           "recall_at_3": 0.9,
-          "avg_latency_ms": 3.16,
+          "avg_latency_ms": 3.896,
           "leaks": 0
         },
         "multi_hop": {
@@ -54,7 +54,7 @@
           "pass": 6,
           "recall_at_1": 0.333,
           "recall_at_3": 0.718,
-          "avg_latency_ms": 3.681,
+          "avg_latency_ms": 4.543,
           "leaks": 0
         },
         "edge": {
@@ -63,7 +63,7 @@
           "pass": 3,
           "recall_at_1": 0.4,
           "recall_at_3": 0.6,
-          "avg_latency_ms": 2.79,
+          "avg_latency_ms": 3.708,
           "leaks": 0
         },
         "cross_company": {
@@ -72,7 +72,7 @@
           "pass": 3,
           "recall_at_1": 0.667,
           "recall_at_3": 1.0,
-          "avg_latency_ms": 3.033,
+          "avg_latency_ms": 4.187,
           "leaks": 0
         },
         "injection": {
@@ -81,7 +81,7 @@
           "pass": 1,
           "recall_at_1": 0.5,
           "recall_at_3": 0.5,
-          "avg_latency_ms": 3.24,
+          "avg_latency_ms": 4.683,
           "leaks": 0
         },
         "not_covered": {
@@ -90,7 +90,7 @@
           "pass": 0,
           "recall_at_1": null,
           "recall_at_3": null,
-          "avg_latency_ms": 2.94,
+          "avg_latency_ms": 3.489,
           "leaks": 0
         }
       },
@@ -101,7 +101,7 @@
           "pass": 17,
           "recall_at_1": 0.573,
           "recall_at_3": 0.76,
-          "avg_latency_ms": 3.142,
+          "avg_latency_ms": 4.048,
           "leaks": 0
         },
         "bolt": {
@@ -110,7 +110,7 @@
           "pass": 21,
           "recall_at_1": 0.545,
           "recall_at_3": 0.859,
-          "avg_latency_ms": 3.454,
+          "avg_latency_ms": 4.218,
           "leaks": 0
         },
         "crest": {
@@ -119,7 +119,7 @@
           "pass": 18,
           "recall_at_1": 0.521,
           "recall_at_3": 0.833,
-          "avg_latency_ms": 3.15,
+          "avg_latency_ms": 4.431,
           "leaks": 0
         }
       },
@@ -150,8 +150,8 @@
       "model": "snowflake/snowflake-arctic-embed-s",
       "query_prefix": "",
       "passage_prefix": "",
-      "load_s": 0.36,
-      "index_s": 1.18,
+      "load_s": 0.44,
+      "index_s": 1.45,
       "gap": 0.066,
       "best_distance_answerable": 0.203,
       "best_distance_not_covered": 0.269,
@@ -161,7 +161,7 @@
         "pass": 57,
         "recall_at_1": 0.56,
         "recall_at_3": 0.82,
-        "avg_latency_ms": 5.836,
+        "avg_latency_ms": 7.083,
         "leaks": 0
       },
       "by_category": {
@@ -171,7 +171,7 @@
           "pass": 17,
           "recall_at_1": 0.75,
           "recall_at_3": 0.944,
-          "avg_latency_ms": 5.125,
+          "avg_latency_ms": 5.956,
           "leaks": 0
         },
         "paraphrase": {
@@ -180,7 +180,7 @@
           "pass": 20,
           "recall_at_1": 0.646,
           "recall_at_3": 0.833,
-          "avg_latency_ms": 5.834,
+          "avg_latency_ms": 7.644,
           "leaks": 0
         },
         "same_section": {
@@ -189,7 +189,7 @@
           "pass": 7,
           "recall_at_1": 0.417,
           "recall_at_3": 0.867,
-          "avg_latency_ms": 5.916,
+          "avg_latency_ms": 8.196,
           "leaks": 0
         },
         "multi_hop": {
@@ -198,7 +198,7 @@
           "pass": 7,
           "recall_at_1": 0.372,
           "recall_at_3": 0.756,
-          "avg_latency_ms": 6.765,
+          "avg_latency_ms": 8.351,
           "leaks": 0
         },
         "edge": {
@@ -207,7 +207,7 @@
           "pass": 3,
           "recall_at_1": 0.4,
           "recall_at_3": 0.6,
-          "avg_latency_ms": 5.264,
+          "avg_latency_ms": 6.034,
           "leaks": 0
         },
         "cross_company": {
@@ -216,7 +216,7 @@
           "pass": 2,
           "recall_at_1": 0.333,
           "recall_at_3": 0.667,
-          "avg_latency_ms": 5.885,
+          "avg_latency_ms": 6.702,
           "leaks": 0
         },
         "injection": {
@@ -225,7 +225,7 @@
           "pass": 1,
           "recall_at_1": 0.5,
           "recall_at_3": 0.5,
-          "avg_latency_ms": 6.022,
+          "avg_latency_ms": 6.815,
           "leaks": 0
         },
         "not_covered": {
@@ -234,7 +234,7 @@
           "pass": 0,
           "recall_at_1": null,
           "recall_at_3": null,
-          "avg_latency_ms": 6.018,
+          "avg_latency_ms": 5.864,
           "leaks": 0
         }
       },
@@ -245,7 +245,7 @@
           "pass": 17,
           "recall_at_1": 0.553,
           "recall_at_3": 0.787,
-          "avg_latency_ms": 5.754,
+          "avg_latency_ms": 6.861,
           "leaks": 0
         },
         "bolt": {
@@ -254,7 +254,7 @@
           "pass": 21,
           "recall_at_1": 0.545,
           "recall_at_3": 0.859,
-          "avg_latency_ms": 5.619,
+          "avg_latency_ms": 7.155,
           "leaks": 0
         },
         "crest": {
@@ -263,7 +263,7 @@
           "pass": 19,
           "recall_at_1": 0.583,
           "recall_at_3": 0.812,
-          "avg_latency_ms": 6.137,
+          "avg_latency_ms": 7.233,
           "leaks": 0
         }
       },
@@ -293,8 +293,8 @@
       "model": "snowflake/snowflake-arctic-embed-s",
       "query_prefix": "Represent this sentence for searching relevant passages: ",
       "passage_prefix": "",
-      "load_s": 0.36,
-      "index_s": 1.15,
+      "load_s": 0.44,
+      "index_s": 1.48,
       "gap": 0.109,
       "best_distance_answerable": 0.301,
       "best_distance_not_covered": 0.409,
@@ -304,7 +304,7 @@
         "pass": 58,
         "recall_at_1": 0.567,
         "recall_at_3": 0.844,
-        "avg_latency_ms": 7.448,
+        "avg_latency_ms": 9.272,
         "leaks": 0
       },
       "by_category": {
@@ -314,7 +314,7 @@
           "pass": 17,
           "recall_at_1": 0.806,
           "recall_at_3": 0.972,
-          "avg_latency_ms": 6.683,
+          "avg_latency_ms": 7.943,
           "leaks": 0
         },
         "paraphrase": {
@@ -323,7 +323,7 @@
           "pass": 19,
           "recall_at_1": 0.625,
           "recall_at_3": 0.812,
-          "avg_latency_ms": 7.097,
+          "avg_latency_ms": 10.038,
           "leaks": 0
         },
         "same_section": {
@@ -332,7 +332,7 @@
           "pass": 8,
           "recall_at_1": 0.417,
           "recall_at_3": 0.9,
-          "avg_latency_ms": 8.859,
+          "avg_latency_ms": 9.101,
           "leaks": 0
         },
         "multi_hop": {
@@ -341,7 +341,7 @@
           "pass": 5,
           "recall_at_1": 0.372,
           "recall_at_3": 0.641,
-          "avg_latency_ms": 9.522,
+          "avg_latency_ms": 11.628,
           "leaks": 0
         },
         "edge": {
@@ -350,7 +350,7 @@
           "pass": 4,
           "recall_at_1": 0.4,
           "recall_at_3": 0.8,
-          "avg_latency_ms": 6.58,
+          "avg_latency_ms": 7.376,
           "leaks": 0
         },
         "cross_company": {
@@ -359,7 +359,7 @@
           "pass": 3,
           "recall_at_1": 0.333,
           "recall_at_3": 1.0,
-          "avg_latency_ms": 6.1,
+          "avg_latency_ms": 8.335,
           "leaks": 0
         },
         "injection": {
@@ -368,7 +368,7 @@
           "pass": 2,
           "recall_at_1": 0.5,
           "recall_at_3": 1.0,
-          "avg_latency_ms": 8.425,
+          "avg_latency_ms": 9.83,
           "leaks": 0
         },
         "not_covered": {
@@ -377,7 +377,7 @@
           "pass": 0,
           "recall_at_1": null,
           "recall_at_3": null,
-          "avg_latency_ms": 6.409,
+          "avg_latency_ms": 8.218,
           "leaks": 0
         }
       },
@@ -388,7 +388,7 @@
           "pass": 18,
           "recall_at_1": 0.533,
           "recall_at_3": 0.8,
-          "avg_latency_ms": 7.356,
+          "avg_latency_ms": 8.979,
           "leaks": 0
         },
         "bolt": {
@@ -397,7 +397,7 @@
           "pass": 20,
           "recall_at_1": 0.641,
           "recall_at_3": 0.821,
-          "avg_latency_ms": 7.164,
+          "avg_latency_ms": 8.766,
           "leaks": 0
         },
         "crest": {
@@ -406,7 +406,7 @@
           "pass": 20,
           "recall_at_1": 0.521,
           "recall_at_3": 0.917,
-          "avg_latency_ms": 7.823,
+          "avg_latency_ms": 10.07,
           "leaks": 0
         }
       },
@@ -435,8 +435,8 @@
       "model": "BAAI/bge-base-en-v1.5",
       "query_prefix": "",
       "passage_prefix": "",
-      "load_s": 0.46,
-      "index_s": 4.69,
+      "load_s": 0.56,
+      "index_s": 5.82,
       "gap": 0.12,
       "best_distance_answerable": 0.273,
       "best_distance_not_covered": 0.393,
@@ -446,7 +446,7 @@
         "pass": 58,
         "recall_at_1": 0.547,
         "recall_at_3": 0.836,
-        "avg_latency_ms": 17.598,
+        "avg_latency_ms": 20.681,
         "leaks": 0
       },
       "by_category": {
@@ -456,7 +456,7 @@
           "pass": 18,
           "recall_at_1": 0.75,
           "recall_at_3": 1.0,
-          "avg_latency_ms": 15.699,
+          "avg_latency_ms": 19.588,
           "leaks": 0
         },
         "paraphrase": {
@@ -465,7 +465,7 @@
           "pass": 21,
           "recall_at_1": 0.646,
           "recall_at_3": 0.875,
-          "avg_latency_ms": 18.24,
+          "avg_latency_ms": 20.3,
           "leaks": 0
         },
         "same_section": {
@@ -474,7 +474,7 @@
           "pass": 9,
           "recall_at_1": 0.417,
           "recall_at_3": 0.9,
-          "avg_latency_ms": 18.298,
+          "avg_latency_ms": 22.4,
           "leaks": 0
         },
         "multi_hop": {
@@ -483,7 +483,7 @@
           "pass": 3,
           "recall_at_1": 0.295,
           "recall_at_3": 0.59,
-          "avg_latency_ms": 21.642,
+          "avg_latency_ms": 24.956,
           "leaks": 0
         },
         "edge": {
@@ -492,7 +492,7 @@
           "pass": 4,
           "recall_at_1": 0.4,
           "recall_at_3": 0.8,
-          "avg_latency_ms": 14.776,
+          "avg_latency_ms": 16.454,
           "leaks": 0
         },
         "cross_company": {
@@ -501,7 +501,7 @@
           "pass": 2,
           "recall_at_1": 0.333,
           "recall_at_3": 0.667,
-          "avg_latency_ms": 16.103,
+          "avg_latency_ms": 19.123,
           "leaks": 0
         },
         "injection": {
@@ -510,7 +510,7 @@
           "pass": 1,
           "recall_at_1": 0.5,
           "recall_at_3": 0.5,
-          "avg_latency_ms": 19.788,
+          "avg_latency_ms": 25.508,
           "leaks": 0
         },
         "not_covered": {
@@ -519,7 +519,7 @@
           "pass": 0,
           "recall_at_1": null,
           "recall_at_3": null,
-          "avg_latency_ms": 14.947,
+          "avg_latency_ms": 17.407,
           "leaks": 0
         }
       },
@@ -530,7 +530,7 @@
           "pass": 18,
           "recall_at_1": 0.613,
           "recall_at_3": 0.8,
-          "avg_latency_ms": 16.882,
+          "avg_latency_ms": 20.989,
           "leaks": 0
         },
         "bolt": {
@@ -539,7 +539,7 @@
           "pass": 20,
           "recall_at_1": 0.545,
           "recall_at_3": 0.833,
-          "avg_latency_ms": 16.517,
+          "avg_latency_ms": 20.229,
           "leaks": 0
         },
         "crest": {
@@ -548,7 +548,7 @@
           "pass": 20,
           "recall_at_1": 0.479,
           "recall_at_3": 0.875,
-          "avg_latency_ms": 19.394,
+          "avg_latency_ms": 20.826,
           "leaks": 0
         }
       },
@@ -577,8 +577,8 @@
       "model": "BAAI/bge-base-en-v1.5",
       "query_prefix": "Represent this sentence for searching relevant passages: ",
       "passage_prefix": "",
-      "load_s": 0.46,
-      "index_s": 4.88,
+      "load_s": 0.56,
+      "index_s": 6.32,
       "gap": 0.145,
       "best_distance_answerable": 0.314,
       "best_distance_not_covered": 0.46,
@@ -588,7 +588,7 @@
         "pass": 61,
         "recall_at_1": 0.567,
         "recall_at_3": 0.869,
-        "avg_latency_ms": 25.828,
+        "avg_latency_ms": 25.402,
         "leaks": 0
       },
       "by_category": {
@@ -598,7 +598,7 @@
           "pass": 18,
           "recall_at_1": 0.75,
           "recall_at_3": 1.0,
-          "avg_latency_ms": 21.832,
+          "avg_latency_ms": 21.152,
           "leaks": 0
         },
         "paraphrase": {
@@ -607,7 +607,7 @@
           "pass": 22,
           "recall_at_1": 0.646,
           "recall_at_3": 0.917,
-          "avg_latency_ms": 27.61,
+          "avg_latency_ms": 26.961,
           "leaks": 0
         },
         "same_section": {
@@ -616,7 +616,7 @@
           "pass": 8,
           "recall_at_1": 0.417,
           "recall_at_3": 0.85,
-          "avg_latency_ms": 27.328,
+          "avg_latency_ms": 27.571,
           "leaks": 0
         },
         "multi_hop": {
@@ -625,7 +625,7 @@
           "pass": 6,
           "recall_at_1": 0.41,
           "recall_at_3": 0.744,
-          "avg_latency_ms": 32.457,
+          "avg_latency_ms": 30.361,
           "leaks": 0
         },
         "edge": {
@@ -634,7 +634,7 @@
           "pass": 4,
           "recall_at_1": 0.6,
           "recall_at_3": 0.8,
-          "avg_latency_ms": 19.66,
+          "avg_latency_ms": 19.16,
           "leaks": 0
         },
         "cross_company": {
@@ -643,7 +643,7 @@
           "pass": 2,
           "recall_at_1": 0.333,
           "recall_at_3": 0.667,
-          "avg_latency_ms": 23.307,
+          "avg_latency_ms": 23.783,
           "leaks": 0
         },
         "injection": {
@@ -652,7 +652,7 @@
           "pass": 1,
           "recall_at_1": 0.0,
           "recall_at_3": 0.5,
-          "avg_latency_ms": 28.77,
+          "avg_latency_ms": 28.06,
           "leaks": 0
         },
         "not_covered": {
@@ -661,7 +661,7 @@
           "pass": 0,
           "recall_at_1": null,
           "recall_at_3": null,
-          "avg_latency_ms": 22.046,
+          "avg_latency_ms": 23.719,
           "leaks": 0
         }
       },
@@ -672,7 +672,7 @@
           "pass": 19,
           "recall_at_1": 0.653,
           "recall_at_3": 0.84,
-          "avg_latency_ms": 26.34,
+          "avg_latency_ms": 24.903,
           "leaks": 0
         },
         "bolt": {
@@ -681,7 +681,7 @@
           "pass": 23,
           "recall_at_1": 0.506,
           "recall_at_3": 0.91,
-          "avg_latency_ms": 25.759,
+          "avg_latency_ms": 26.15,
           "leaks": 0
         },
         "crest": {
@@ -690,7 +690,7 @@
           "pass": 19,
           "recall_at_1": 0.542,
           "recall_at_3": 0.854,
-          "avg_latency_ms": 25.385,
+          "avg_latency_ms": 25.152,
           "leaks": 0
         }
       },
@@ -712,12 +712,287 @@
       ]
     },
     {
+      "label": "bge-large-en-v1.5",
+      "model": "BAAI/bge-large-en-v1.5",
+      "query_prefix": "",
+      "passage_prefix": "",
+      "load_s": 2.02,
+      "index_s": 18.24,
+      "gap": 0.115,
+      "best_distance_answerable": 0.286,
+      "best_distance_not_covered": 0.401,
+      "overall": {
+        "n": 90,
+        "answerable": 75,
+        "pass": 63,
+        "recall_at_1": 0.649,
+        "recall_at_3": 0.891,
+        "avg_latency_ms": 61.815,
+        "leaks": 0
+      },
+      "by_category": {
+        "direct": {
+          "n": 18,
+          "answerable": 18,
+          "pass": 18,
+          "recall_at_1": 0.861,
+          "recall_at_3": 1.0,
+          "avg_latency_ms": 54.977,
+          "leaks": 0
+        },
+        "paraphrase": {
+          "n": 24,
+          "answerable": 24,
+          "pass": 23,
+          "recall_at_1": 0.729,
+          "recall_at_3": 0.958,
+          "avg_latency_ms": 64.544,
+          "leaks": 0
+        },
+        "same_section": {
+          "n": 10,
+          "answerable": 10,
+          "pass": 8,
+          "recall_at_1": 0.417,
+          "recall_at_3": 0.9,
+          "avg_latency_ms": 62.738,
+          "leaks": 0
+        },
+        "multi_hop": {
+          "n": 13,
+          "answerable": 13,
+          "pass": 6,
+          "recall_at_1": 0.423,
+          "recall_at_3": 0.679,
+          "avg_latency_ms": 79.853,
+          "leaks": 0
+        },
+        "edge": {
+          "n": 5,
+          "answerable": 5,
+          "pass": 5,
+          "recall_at_1": 0.8,
+          "recall_at_3": 1.0,
+          "avg_latency_ms": 49.49,
+          "leaks": 0
+        },
+        "cross_company": {
+          "n": 6,
+          "answerable": 3,
+          "pass": 2,
+          "recall_at_1": 0.333,
+          "recall_at_3": 0.667,
+          "avg_latency_ms": 53.987,
+          "leaks": 0
+        },
+        "injection": {
+          "n": 4,
+          "answerable": 2,
+          "pass": 1,
+          "recall_at_1": 0.5,
+          "recall_at_3": 0.5,
+          "avg_latency_ms": 60.64,
+          "leaks": 0
+        },
+        "not_covered": {
+          "n": 10,
+          "answerable": 0,
+          "pass": 0,
+          "recall_at_1": null,
+          "recall_at_3": null,
+          "avg_latency_ms": 54.529,
+          "leaks": 0
+        }
+      },
+      "by_company": {
+        "acme": {
+          "n": 30,
+          "answerable": 25,
+          "pass": 20,
+          "recall_at_1": 0.713,
+          "recall_at_3": 0.88,
+          "avg_latency_ms": 62.91,
+          "leaks": 0
+        },
+        "bolt": {
+          "n": 30,
+          "answerable": 26,
+          "pass": 23,
+          "recall_at_1": 0.628,
+          "recall_at_3": 0.917,
+          "avg_latency_ms": 61.531,
+          "leaks": 0
+        },
+        "crest": {
+          "n": 30,
+          "answerable": 24,
+          "pass": 20,
+          "recall_at_1": 0.604,
+          "recall_at_3": 0.875,
+          "avg_latency_ms": 61.004,
+          "leaks": 0
+        }
+      },
+      "failed": [
+        "acme-18",
+        "acme-19",
+        "acme-20",
+        "acme-21",
+        "acme-22",
+        "bolt-11",
+        "bolt-19",
+        "bolt-20",
+        "crest-16",
+        "crest-19",
+        "crest-26",
+        "crest-29"
+      ]
+    },
+    {
+      "label": "bge-large-en-v1.5 + prefix",
+      "model": "BAAI/bge-large-en-v1.5",
+      "query_prefix": "Represent this sentence for searching relevant passages: ",
+      "passage_prefix": "",
+      "load_s": 2.02,
+      "index_s": 18.52,
+      "gap": 0.123,
+      "best_distance_answerable": 0.303,
+      "best_distance_not_covered": 0.426,
+      "overall": {
+        "n": 90,
+        "answerable": 75,
+        "pass": 62,
+        "recall_at_1": 0.629,
+        "recall_at_3": 0.884,
+        "avg_latency_ms": 84.382,
+        "leaks": 0
+      },
+      "by_category": {
+        "direct": {
+          "n": 18,
+          "answerable": 18,
+          "pass": 18,
+          "recall_at_1": 0.861,
+          "recall_at_3": 1.0,
+          "avg_latency_ms": 77.452,
+          "leaks": 0
+        },
+        "paraphrase": {
+          "n": 24,
+          "answerable": 24,
+          "pass": 23,
+          "recall_at_1": 0.688,
+          "recall_at_3": 0.958,
+          "avg_latency_ms": 94.158,
+          "leaks": 0
+        },
+        "same_section": {
+          "n": 10,
+          "answerable": 10,
+          "pass": 8,
+          "recall_at_1": 0.417,
+          "recall_at_3": 0.9,
+          "avg_latency_ms": 85.099,
+          "leaks": 0
+        },
+        "multi_hop": {
+          "n": 13,
+          "answerable": 13,
+          "pass": 5,
+          "recall_at_1": 0.385,
+          "recall_at_3": 0.641,
+          "avg_latency_ms": 99.702,
+          "leaks": 0
+        },
+        "edge": {
+          "n": 5,
+          "answerable": 5,
+          "pass": 4,
+          "recall_at_1": 0.8,
+          "recall_at_3": 0.8,
+          "avg_latency_ms": 60.486,
+          "leaks": 0
+        },
+        "cross_company": {
+          "n": 6,
+          "answerable": 3,
+          "pass": 3,
+          "recall_at_1": 0.333,
+          "recall_at_3": 1.0,
+          "avg_latency_ms": 77.347,
+          "leaks": 0
+        },
+        "injection": {
+          "n": 4,
+          "answerable": 2,
+          "pass": 1,
+          "recall_at_1": 0.5,
+          "recall_at_3": 0.5,
+          "avg_latency_ms": 83.91,
+          "leaks": 0
+        },
+        "not_covered": {
+          "n": 10,
+          "answerable": 0,
+          "pass": 0,
+          "recall_at_1": null,
+          "recall_at_3": null,
+          "avg_latency_ms": 69.117,
+          "leaks": 0
+        }
+      },
+      "by_company": {
+        "acme": {
+          "n": 30,
+          "answerable": 25,
+          "pass": 19,
+          "recall_at_1": 0.653,
+          "recall_at_3": 0.84,
+          "avg_latency_ms": 93.312,
+          "leaks": 0
+        },
+        "bolt": {
+          "n": 30,
+          "answerable": 26,
+          "pass": 23,
+          "recall_at_1": 0.628,
+          "recall_at_3": 0.917,
+          "avg_latency_ms": 80.126,
+          "leaks": 0
+        },
+        "crest": {
+          "n": 30,
+          "answerable": 24,
+          "pass": 20,
+          "recall_at_1": 0.604,
+          "recall_at_3": 0.896,
+          "avg_latency_ms": 79.707,
+          "leaks": 0
+        }
+      },
+      "failed": [
+        "acme-18",
+        "acme-19",
+        "acme-20",
+        "acme-21",
+        "acme-22",
+        "acme-30",
+        "bolt-11",
+        "bolt-19",
+        "bolt-20",
+        "crest-16",
+        "crest-18",
+        "crest-19",
+        "crest-26"
+      ]
+    },
+    {
       "label": "nomic-embed-v1.5",
       "model": "nomic-ai/nomic-embed-text-v1.5",
       "query_prefix": "",
       "passage_prefix": "",
-      "load_s": 0.68,
-      "index_s": 7.32,
+      "load_s": 0.83,
+      "index_s": 7.17,
       "gap": 0.122,
       "best_distance_answerable": 0.268,
       "best_distance_not_covered": 0.39,
@@ -727,7 +1002,7 @@
         "pass": 64,
         "recall_at_1": 0.627,
         "recall_at_3": 0.891,
-        "avg_latency_ms": 27.143,
+        "avg_latency_ms": 29.121,
         "leaks": 0
       },
       "by_category": {
@@ -737,7 +1012,7 @@
           "pass": 18,
           "recall_at_1": 0.806,
           "recall_at_3": 1.0,
-          "avg_latency_ms": 21.869,
+          "avg_latency_ms": 23.799,
           "leaks": 0
         },
         "paraphrase": {
@@ -746,7 +1021,7 @@
           "pass": 22,
           "recall_at_1": 0.771,
           "recall_at_3": 0.917,
-          "avg_latency_ms": 27.389,
+          "avg_latency_ms": 27.986,
           "leaks": 0
         },
         "same_section": {
@@ -755,7 +1030,7 @@
           "pass": 8,
           "recall_at_1": 0.417,
           "recall_at_3": 0.9,
-          "avg_latency_ms": 29.995,
+          "avg_latency_ms": 28.671,
           "leaks": 0
         },
         "multi_hop": {
@@ -764,7 +1039,7 @@
           "pass": 8,
           "recall_at_1": 0.372,
           "recall_at_3": 0.756,
-          "avg_latency_ms": 35.68,
+          "avg_latency_ms": 39.471,
           "leaks": 0
         },
         "edge": {
@@ -773,7 +1048,7 @@
           "pass": 4,
           "recall_at_1": 0.8,
           "recall_at_3": 0.8,
-          "avg_latency_ms": 21.38,
+          "avg_latency_ms": 24.24,
           "leaks": 0
         },
         "cross_company": {
@@ -782,7 +1057,7 @@
           "pass": 3,
           "recall_at_1": 0.333,
           "recall_at_3": 1.0,
-          "avg_latency_ms": 25.797,
+          "avg_latency_ms": 29.642,
           "leaks": 0
         },
         "injection": {
@@ -791,7 +1066,7 @@
           "pass": 1,
           "recall_at_1": 0.0,
           "recall_at_3": 0.5,
-          "avg_latency_ms": 31.675,
+          "avg_latency_ms": 35.373,
           "leaks": 0
         },
         "not_covered": {
@@ -800,7 +1075,7 @@
           "pass": 0,
           "recall_at_1": null,
           "recall_at_3": null,
-          "avg_latency_ms": 23.968,
+          "avg_latency_ms": 28.042,
           "leaks": 0
         }
       },
@@ -811,7 +1086,7 @@
           "pass": 19,
           "recall_at_1": 0.533,
           "recall_at_3": 0.82,
-          "avg_latency_ms": 25.968,
+          "avg_latency_ms": 29.871,
           "leaks": 0
         },
         "bolt": {
@@ -820,7 +1095,7 @@
           "pass": 23,
           "recall_at_1": 0.718,
           "recall_at_3": 0.917,
-          "avg_latency_ms": 26.959,
+          "avg_latency_ms": 27.103,
           "leaks": 0
         },
         "crest": {
@@ -829,7 +1104,7 @@
           "pass": 22,
           "recall_at_1": 0.625,
           "recall_at_3": 0.938,
-          "avg_latency_ms": 28.501,
+          "avg_latency_ms": 30.388,
           "leaks": 0
         }
       },
@@ -852,8 +1127,8 @@
       "model": "nomic-ai/nomic-embed-text-v1.5",
       "query_prefix": "search_query: ",
       "passage_prefix": "search_document: ",
-      "load_s": 0.68,
-      "index_s": 8.9,
+      "load_s": 0.83,
+      "index_s": 7.65,
       "gap": 0.111,
       "best_distance_answerable": 0.248,
       "best_distance_not_covered": 0.359,
@@ -863,7 +1138,7 @@
         "pass": 64,
         "recall_at_1": 0.64,
         "recall_at_3": 0.891,
-        "avg_latency_ms": 30.013,
+        "avg_latency_ms": 33.054,
         "leaks": 0
       },
       "by_category": {
@@ -873,7 +1148,7 @@
           "pass": 18,
           "recall_at_1": 0.75,
           "recall_at_3": 1.0,
-          "avg_latency_ms": 26.691,
+          "avg_latency_ms": 29.937,
           "leaks": 0
         },
         "paraphrase": {
@@ -882,7 +1157,7 @@
           "pass": 22,
           "recall_at_1": 0.854,
           "recall_at_3": 0.917,
-          "avg_latency_ms": 30.626,
+          "avg_latency_ms": 36.695,
           "leaks": 0
         },
         "same_section": {
@@ -891,7 +1166,7 @@
           "pass": 9,
           "recall_at_1": 0.417,
           "recall_at_3": 0.9,
-          "avg_latency_ms": 30.605,
+          "avg_latency_ms": 34.441,
           "leaks": 0
         },
         "multi_hop": {
@@ -900,7 +1175,7 @@
           "pass": 7,
           "recall_at_1": 0.372,
           "recall_at_3": 0.756,
-          "avg_latency_ms": 38.133,
+          "avg_latency_ms": 40.918,
           "leaks": 0
         },
         "edge": {
@@ -909,7 +1184,7 @@
           "pass": 4,
           "recall_at_1": 0.8,
           "recall_at_3": 0.8,
-          "avg_latency_ms": 25.442,
+          "avg_latency_ms": 23.044,
           "leaks": 0
         },
         "cross_company": {
@@ -918,7 +1193,7 @@
           "pass": 3,
           "recall_at_1": 0.333,
           "recall_at_3": 1.0,
-          "avg_latency_ms": 30.307,
+          "avg_latency_ms": 27.42,
           "leaks": 0
         },
         "injection": {
@@ -927,7 +1202,7 @@
           "pass": 1,
           "recall_at_1": 0.0,
           "recall_at_3": 0.5,
-          "avg_latency_ms": 31.39,
+          "avg_latency_ms": 32.642,
           "leaks": 0
         },
         "not_covered": {
@@ -936,7 +1211,7 @@
           "pass": 0,
           "recall_at_1": null,
           "recall_at_3": null,
-          "avg_latency_ms": 24.927,
+          "avg_latency_ms": 26.862,
           "leaks": 0
         }
       },
@@ -947,7 +1222,7 @@
           "pass": 19,
           "recall_at_1": 0.573,
           "recall_at_3": 0.84,
-          "avg_latency_ms": 31.323,
+          "avg_latency_ms": 38.164,
           "leaks": 0
         },
         "bolt": {
@@ -956,7 +1231,7 @@
           "pass": 23,
           "recall_at_1": 0.718,
           "recall_at_3": 0.897,
-          "avg_latency_ms": 30.154,
+          "avg_latency_ms": 30.444,
           "leaks": 0
         },
         "crest": {
@@ -965,7 +1240,7 @@
           "pass": 22,
           "recall_at_1": 0.625,
           "recall_at_3": 0.938,
-          "avg_latency_ms": 28.561,
+          "avg_latency_ms": 30.554,
           "leaks": 0
         }
       },
@@ -988,8 +1263,8 @@
       "model": "nomic-ai/nomic-embed-text-v1.5-Q",
       "query_prefix": "",
       "passage_prefix": "",
-      "load_s": 0.28,
-      "index_s": 2.91,
+      "load_s": 0.29,
+      "index_s": 3.87,
       "gap": 0.124,
       "best_distance_answerable": 0.276,
       "best_distance_not_covered": 0.4,
@@ -999,7 +1274,7 @@
         "pass": 62,
         "recall_at_1": 0.6,
         "recall_at_3": 0.878,
-        "avg_latency_ms": 12.342,
+        "avg_latency_ms": 12.992,
         "leaks": 0
       },
       "by_category": {
@@ -1009,7 +1284,7 @@
           "pass": 18,
           "recall_at_1": 0.75,
           "recall_at_3": 1.0,
-          "avg_latency_ms": 10.712,
+          "avg_latency_ms": 11.808,
           "leaks": 0
         },
         "paraphrase": {
@@ -1018,7 +1293,7 @@
           "pass": 22,
           "recall_at_1": 0.729,
           "recall_at_3": 0.917,
-          "avg_latency_ms": 12.824,
+          "avg_latency_ms": 13.596,
           "leaks": 0
         },
         "same_section": {
@@ -1027,7 +1302,7 @@
           "pass": 8,
           "recall_at_1": 0.417,
           "recall_at_3": 0.9,
-          "avg_latency_ms": 13.047,
+          "avg_latency_ms": 12.603,
           "leaks": 0
         },
         "multi_hop": {
@@ -1036,7 +1311,7 @@
           "pass": 6,
           "recall_at_1": 0.372,
           "recall_at_3": 0.679,
-          "avg_latency_ms": 15.563,
+          "avg_latency_ms": 16.009,
           "leaks": 0
         },
         "edge": {
@@ -1045,7 +1320,7 @@
           "pass": 4,
           "recall_at_1": 0.8,
           "recall_at_3": 0.8,
-          "avg_latency_ms": 10.09,
+          "avg_latency_ms": 11.088,
           "leaks": 0
         },
         "cross_company": {
@@ -1054,7 +1329,7 @@
           "pass": 3,
           "recall_at_1": 0.0,
           "recall_at_3": 1.0,
-          "avg_latency_ms": 11.13,
+          "avg_latency_ms": 12.542,
           "leaks": 0
         },
         "injection": {
@@ -1063,7 +1338,7 @@
           "pass": 1,
           "recall_at_1": 0.5,
           "recall_at_3": 0.5,
-          "avg_latency_ms": 13.46,
+          "avg_latency_ms": 12.578,
           "leaks": 0
         },
         "not_covered": {
@@ -1072,7 +1347,7 @@
           "pass": 0,
           "recall_at_1": null,
           "recall_at_3": null,
-          "avg_latency_ms": 10.634,
+          "avg_latency_ms": 11.523,
           "leaks": 0
         }
       },
@@ -1083,7 +1358,7 @@
           "pass": 19,
           "recall_at_1": 0.533,
           "recall_at_3": 0.82,
-          "avg_latency_ms": 12.709,
+          "avg_latency_ms": 12.886,
           "leaks": 0
         },
         "bolt": {
@@ -1092,7 +1367,7 @@
           "pass": 23,
           "recall_at_1": 0.641,
           "recall_at_3": 0.917,
-          "avg_latency_ms": 12.299,
+          "avg_latency_ms": 12.935,
           "leaks": 0
         },
         "crest": {
@@ -1101,7 +1376,7 @@
           "pass": 20,
           "recall_at_1": 0.625,
           "recall_at_3": 0.896,
-          "avg_latency_ms": 12.018,
+          "avg_latency_ms": 13.154,
           "leaks": 0
         }
       },
@@ -1126,8 +1401,8 @@
       "model": "nomic-ai/nomic-embed-text-v1.5-Q",
       "query_prefix": "search_query: ",
       "passage_prefix": "search_document: ",
-      "load_s": 0.28,
-      "index_s": 3.05,
+      "load_s": 0.29,
+      "index_s": 3.27,
       "gap": 0.108,
       "best_distance_answerable": 0.253,
       "best_distance_not_covered": 0.36,
@@ -1137,7 +1412,7 @@
         "pass": 61,
         "recall_at_1": 0.587,
         "recall_at_3": 0.871,
-        "avg_latency_ms": 14.593,
+        "avg_latency_ms": 16.96,
         "leaks": 0
       },
       "by_category": {
@@ -1147,7 +1422,7 @@
           "pass": 18,
           "recall_at_1": 0.694,
           "recall_at_3": 1.0,
-          "avg_latency_ms": 12.589,
+          "avg_latency_ms": 14.066,
           "leaks": 0
         },
         "paraphrase": {
@@ -1156,7 +1431,7 @@
           "pass": 22,
           "recall_at_1": 0.771,
           "recall_at_3": 0.917,
-          "avg_latency_ms": 16.447,
+          "avg_latency_ms": 18.697,
           "leaks": 0
         },
         "same_section": {
@@ -1165,7 +1440,7 @@
           "pass": 8,
           "recall_at_1": 0.417,
           "recall_at_3": 0.9,
-          "avg_latency_ms": 14.659,
+          "avg_latency_ms": 17.516,
           "leaks": 0
         },
         "multi_hop": {
@@ -1174,7 +1449,7 @@
           "pass": 5,
           "recall_at_1": 0.372,
           "recall_at_3": 0.641,
-          "avg_latency_ms": 17.032,
+          "avg_latency_ms": 21.19,
           "leaks": 0
         },
         "edge": {
@@ -1183,7 +1458,7 @@
           "pass": 4,
           "recall_at_1": 0.8,
           "recall_at_3": 0.8,
-          "avg_latency_ms": 12.078,
+          "avg_latency_ms": 12.536,
           "leaks": 0
         },
         "cross_company": {
@@ -1192,7 +1467,7 @@
           "pass": 3,
           "recall_at_1": 0.0,
           "recall_at_3": 1.0,
-          "avg_latency_ms": 12.945,
+          "avg_latency_ms": 14.897,
           "leaks": 0
         },
         "injection": {
@@ -1201,7 +1476,7 @@
           "pass": 1,
           "recall_at_1": 0.0,
           "recall_at_3": 0.5,
-          "avg_latency_ms": 15.85,
+          "avg_latency_ms": 18.043,
           "leaks": 0
         },
         "not_covered": {
@@ -1210,7 +1485,7 @@
           "pass": 0,
           "recall_at_1": null,
           "recall_at_3": null,
-          "avg_latency_ms": 12.26,
+          "avg_latency_ms": 14.958,
           "leaks": 0
         }
       },
@@ -1221,7 +1496,7 @@
           "pass": 18,
           "recall_at_1": 0.493,
           "recall_at_3": 0.8,
-          "avg_latency_ms": 14.57,
+          "avg_latency_ms": 15.832,
           "leaks": 0
         },
         "bolt": {
@@ -1230,7 +1505,7 @@
           "pass": 22,
           "recall_at_1": 0.679,
           "recall_at_3": 0.897,
-          "avg_latency_ms": 15.405,
+          "avg_latency_ms": 18.023,
           "leaks": 0
         },
         "crest": {
@@ -1239,7 +1514,7 @@
           "pass": 21,
           "recall_at_1": 0.583,
           "recall_at_3": 0.917,
-          "avg_latency_ms": 13.805,
+          "avg_latency_ms": 17.023,
           "leaks": 0
         }
       },

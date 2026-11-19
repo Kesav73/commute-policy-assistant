@@ -51,6 +51,9 @@ VARIANTS = [
     Variant("arctic-embed-s + prefix", "snowflake/snowflake-arctic-embed-s", BGE_QUERY),
     Variant("bge-base-en-v1.5", "BAAI/bge-base-en-v1.5"),
     Variant("bge-base-en-v1.5 + prefix", "BAAI/bge-base-en-v1.5", BGE_QUERY),
+    # Same family, 3x larger (335M, 1.2 GB): does size alone help?
+    Variant("bge-large-en-v1.5", "BAAI/bge-large-en-v1.5"),
+    Variant("bge-large-en-v1.5 + prefix", "BAAI/bge-large-en-v1.5", BGE_QUERY),
     Variant("nomic-embed-v1.5", "nomic-ai/nomic-embed-text-v1.5"),
     Variant("nomic-embed-v1.5 + prefix", "nomic-ai/nomic-embed-text-v1.5",
             "search_query: ", "search_document: "),
