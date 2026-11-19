@@ -1,0 +1,1264 @@
+{
+  "generated_at": "2026-11-20 00:07:20",
+  "variants": [
+    {
+      "label": "all-MiniLM-L6-v2 (baseline)",
+      "model": "app",
+      "query_prefix": "",
+      "passage_prefix": "",
+      "load_s": 0.03,
+      "index_s": 0.9,
+      "gap": 0.209,
+      "best_distance_answerable": 0.437,
+      "best_distance_not_covered": 0.646,
+      "overall": {
+        "n": 90,
+        "answerable": 75,
+        "pass": 56,
+        "recall_at_1": 0.547,
+        "recall_at_3": 0.818,
+        "avg_latency_ms": 3.248,
+        "leaks": 0
+      },
+      "by_category": {
+        "direct": {
+          "n": 18,
+          "answerable": 18,
+          "pass": 16,
+          "recall_at_1": 0.778,
+          "recall_at_3": 0.917,
+          "avg_latency_ms": 3.302,
+          "leaks": 0
+        },
+        "paraphrase": {
+          "n": 24,
+          "answerable": 24,
+          "pass": 19,
+          "recall_at_1": 0.562,
+          "recall_at_3": 0.812,
+          "avg_latency_ms": 3.29,
+          "leaks": 0
+        },
+        "same_section": {
+          "n": 10,
+          "answerable": 10,
+          "pass": 8,
+          "recall_at_1": 0.417,
+          "recall_at_3": 0.9,
+          "avg_latency_ms": 3.16,
+          "leaks": 0
+        },
+        "multi_hop": {
+          "n": 13,
+          "answerable": 13,
+          "pass": 6,
+          "recall_at_1": 0.333,
+          "recall_at_3": 0.718,
+          "avg_latency_ms": 3.681,
+          "leaks": 0
+        },
+        "edge": {
+          "n": 5,
+          "answerable": 5,
+          "pass": 3,
+          "recall_at_1": 0.4,
+          "recall_at_3": 0.6,
+          "avg_latency_ms": 2.79,
+          "leaks": 0
+        },
+        "cross_company": {
+          "n": 6,
+          "answerable": 3,
+          "pass": 3,
+          "recall_at_1": 0.667,
+          "recall_at_3": 1.0,
+          "avg_latency_ms": 3.033,
+          "leaks": 0
+        },
+        "injection": {
+          "n": 4,
+          "answerable": 2,
+          "pass": 1,
+          "recall_at_1": 0.5,
+          "recall_at_3": 0.5,
+          "avg_latency_ms": 3.24,
+          "leaks": 0
+        },
+        "not_covered": {
+          "n": 10,
+          "answerable": 0,
+          "pass": 0,
+          "recall_at_1": null,
+          "recall_at_3": null,
+          "avg_latency_ms": 2.94,
+          "leaks": 0
+        }
+      },
+      "by_company": {
+        "acme": {
+          "n": 30,
+          "answerable": 25,
+          "pass": 17,
+          "recall_at_1": 0.573,
+          "recall_at_3": 0.76,
+          "avg_latency_ms": 3.142,
+          "leaks": 0
+        },
+        "bolt": {
+          "n": 30,
+          "answerable": 26,
+          "pass": 21,
+          "recall_at_1": 0.545,
+          "recall_at_3": 0.859,
+          "avg_latency_ms": 3.454,
+          "leaks": 0
+        },
+        "crest": {
+          "n": 30,
+          "answerable": 24,
+          "pass": 18,
+          "recall_at_1": 0.521,
+          "recall_at_3": 0.833,
+          "avg_latency_ms": 3.15,
+          "leaks": 0
+        }
+      },
+      "failed": [
+        "acme-06",
+        "acme-08",
+        "acme-09",
+        "acme-14",
+        "acme-18",
+        "acme-19",
+        "acme-20",
+        "acme-30",
+        "bolt-11",
+        "bolt-19",
+        "bolt-20",
+        "bolt-21",
+        "bolt-30",
+        "crest-01",
+        "crest-09",
+        "crest-16",
+        "crest-18",
+        "crest-19",
+        "crest-26"
+      ]
+    },
+    {
+      "label": "arctic-embed-s",
+      "model": "snowflake/snowflake-arctic-embed-s",
+      "query_prefix": "",
+      "passage_prefix": "",
+      "load_s": 0.36,
+      "index_s": 1.18,
+      "gap": 0.066,
+      "best_distance_answerable": 0.203,
+      "best_distance_not_covered": 0.269,
+      "overall": {
+        "n": 90,
+        "answerable": 75,
+        "pass": 57,
+        "recall_at_1": 0.56,
+        "recall_at_3": 0.82,
+        "avg_latency_ms": 5.836,
+        "leaks": 0
+      },
+      "by_category": {
+        "direct": {
+          "n": 18,
+          "answerable": 18,
+          "pass": 17,
+          "recall_at_1": 0.75,
+          "recall_at_3": 0.944,
+          "avg_latency_ms": 5.125,
+          "leaks": 0
+        },
+        "paraphrase": {
+          "n": 24,
+          "answerable": 24,
+          "pass": 20,
+          "recall_at_1": 0.646,
+          "recall_at_3": 0.833,
+          "avg_latency_ms": 5.834,
+          "leaks": 0
+        },
+        "same_section": {
+          "n": 10,
+          "answerable": 10,
+          "pass": 7,
+          "recall_at_1": 0.417,
+          "recall_at_3": 0.867,
+          "avg_latency_ms": 5.916,
+          "leaks": 0
+        },
+        "multi_hop": {
+          "n": 13,
+          "answerable": 13,
+          "pass": 7,
+          "recall_at_1": 0.372,
+          "recall_at_3": 0.756,
+          "avg_latency_ms": 6.765,
+          "leaks": 0
+        },
+        "edge": {
+          "n": 5,
+          "answerable": 5,
+          "pass": 3,
+          "recall_at_1": 0.4,
+          "recall_at_3": 0.6,
+          "avg_latency_ms": 5.264,
+          "leaks": 0
+        },
+        "cross_company": {
+          "n": 6,
+          "answerable": 3,
+          "pass": 2,
+          "recall_at_1": 0.333,
+          "recall_at_3": 0.667,
+          "avg_latency_ms": 5.885,
+          "leaks": 0
+        },
+        "injection": {
+          "n": 4,
+          "answerable": 2,
+          "pass": 1,
+          "recall_at_1": 0.5,
+          "recall_at_3": 0.5,
+          "avg_latency_ms": 6.022,
+          "leaks": 0
+        },
+        "not_covered": {
+          "n": 10,
+          "answerable": 0,
+          "pass": 0,
+          "recall_at_1": null,
+          "recall_at_3": null,
+          "avg_latency_ms": 6.018,
+          "leaks": 0
+        }
+      },
+      "by_company": {
+        "acme": {
+          "n": 30,
+          "answerable": 25,
+          "pass": 17,
+          "recall_at_1": 0.553,
+          "recall_at_3": 0.787,
+          "avg_latency_ms": 5.754,
+          "leaks": 0
+        },
+        "bolt": {
+          "n": 30,
+          "answerable": 26,
+          "pass": 21,
+          "recall_at_1": 0.545,
+          "recall_at_3": 0.859,
+          "avg_latency_ms": 5.619,
+          "leaks": 0
+        },
+        "crest": {
+          "n": 30,
+          "answerable": 24,
+          "pass": 19,
+          "recall_at_1": 0.583,
+          "recall_at_3": 0.812,
+          "avg_latency_ms": 6.137,
+          "leaks": 0
+        }
+      },
+      "failed": [
+        "acme-14",
+        "acme-15",
+        "acme-18",
+        "acme-19",
+        "acme-20",
+        "acme-22",
+        "acme-28",
+        "acme-30",
+        "bolt-09",
+        "bolt-14",
+        "bolt-17",
+        "bolt-19",
+        "bolt-20",
+        "crest-01",
+        "crest-07",
+        "crest-18",
+        "crest-26",
+        "crest-30"
+      ]
+    },
+    {
+      "label": "arctic-embed-s + prefix",
+      "model": "snowflake/snowflake-arctic-embed-s",
+      "query_prefix": "Represent this sentence for searching relevant passages: ",
+      "passage_prefix": "",
+      "load_s": 0.36,
+      "index_s": 1.15,
+      "gap": 0.109,
+      "best_distance_answerable": 0.301,
+      "best_distance_not_covered": 0.409,
+      "overall": {
+        "n": 90,
+        "answerable": 75,
+        "pass": 58,
+        "recall_at_1": 0.567,
+        "recall_at_3": 0.844,
+        "avg_latency_ms": 7.448,
+        "leaks": 0
+      },
+      "by_category": {
+        "direct": {
+          "n": 18,
+          "answerable": 18,
+          "pass": 17,
+          "recall_at_1": 0.806,
+          "recall_at_3": 0.972,
+          "avg_latency_ms": 6.683,
+          "leaks": 0
+        },
+        "paraphrase": {
+          "n": 24,
+          "answerable": 24,
+          "pass": 19,
+          "recall_at_1": 0.625,
+          "recall_at_3": 0.812,
+          "avg_latency_ms": 7.097,
+          "leaks": 0
+        },
+        "same_section": {
+          "n": 10,
+          "answerable": 10,
+          "pass": 8,
+          "recall_at_1": 0.417,
+          "recall_at_3": 0.9,
+          "avg_latency_ms": 8.859,
+          "leaks": 0
+        },
+        "multi_hop": {
+          "n": 13,
+          "answerable": 13,
+          "pass": 5,
+          "recall_at_1": 0.372,
+          "recall_at_3": 0.641,
+          "avg_latency_ms": 9.522,
+          "leaks": 0
+        },
+        "edge": {
+          "n": 5,
+          "answerable": 5,
+          "pass": 4,
+          "recall_at_1": 0.4,
+          "recall_at_3": 0.8,
+          "avg_latency_ms": 6.58,
+          "leaks": 0
+        },
+        "cross_company": {
+          "n": 6,
+          "answerable": 3,
+          "pass": 3,
+          "recall_at_1": 0.333,
+          "recall_at_3": 1.0,
+          "avg_latency_ms": 6.1,
+          "leaks": 0
+        },
+        "injection": {
+          "n": 4,
+          "answerable": 2,
+          "pass": 2,
+          "recall_at_1": 0.5,
+          "recall_at_3": 1.0,
+          "avg_latency_ms": 8.425,
+          "leaks": 0
+        },
+        "not_covered": {
+          "n": 10,
+          "answerable": 0,
+          "pass": 0,
+          "recall_at_1": null,
+          "recall_at_3": null,
+          "avg_latency_ms": 6.409,
+          "leaks": 0
+        }
+      },
+      "by_company": {
+        "acme": {
+          "n": 30,
+          "answerable": 25,
+          "pass": 18,
+          "recall_at_1": 0.533,
+          "recall_at_3": 0.8,
+          "avg_latency_ms": 7.356,
+          "leaks": 0
+        },
+        "bolt": {
+          "n": 30,
+          "answerable": 26,
+          "pass": 20,
+          "recall_at_1": 0.641,
+          "recall_at_3": 0.821,
+          "avg_latency_ms": 7.164,
+          "leaks": 0
+        },
+        "crest": {
+          "n": 30,
+          "answerable": 24,
+          "pass": 20,
+          "recall_at_1": 0.521,
+          "recall_at_3": 0.917,
+          "avg_latency_ms": 7.823,
+          "leaks": 0
+        }
+      },
+      "failed": [
+        "acme-06",
+        "acme-14",
+        "acme-18",
+        "acme-19",
+        "acme-20",
+        "acme-21",
+        "acme-30",
+        "bolt-09",
+        "bolt-11",
+        "bolt-14",
+        "bolt-19",
+        "bolt-20",
+        "bolt-21",
+        "crest-09",
+        "crest-16",
+        "crest-18",
+        "crest-19"
+      ]
+    },
+    {
+      "label": "bge-base-en-v1.5",
+      "model": "BAAI/bge-base-en-v1.5",
+      "query_prefix": "",
+      "passage_prefix": "",
+      "load_s": 0.46,
+      "index_s": 4.69,
+      "gap": 0.12,
+      "best_distance_answerable": 0.273,
+      "best_distance_not_covered": 0.393,
+      "overall": {
+        "n": 90,
+        "answerable": 75,
+        "pass": 58,
+        "recall_at_1": 0.547,
+        "recall_at_3": 0.836,
+        "avg_latency_ms": 17.598,
+        "leaks": 0
+      },
+      "by_category": {
+        "direct": {
+          "n": 18,
+          "answerable": 18,
+          "pass": 18,
+          "recall_at_1": 0.75,
+          "recall_at_3": 1.0,
+          "avg_latency_ms": 15.699,
+          "leaks": 0
+        },
+        "paraphrase": {
+          "n": 24,
+          "answerable": 24,
+          "pass": 21,
+          "recall_at_1": 0.646,
+          "recall_at_3": 0.875,
+          "avg_latency_ms": 18.24,
+          "leaks": 0
+        },
+        "same_section": {
+          "n": 10,
+          "answerable": 10,
+          "pass": 9,
+          "recall_at_1": 0.417,
+          "recall_at_3": 0.9,
+          "avg_latency_ms": 18.298,
+          "leaks": 0
+        },
+        "multi_hop": {
+          "n": 13,
+          "answerable": 13,
+          "pass": 3,
+          "recall_at_1": 0.295,
+          "recall_at_3": 0.59,
+          "avg_latency_ms": 21.642,
+          "leaks": 0
+        },
+        "edge": {
+          "n": 5,
+          "answerable": 5,
+          "pass": 4,
+          "recall_at_1": 0.4,
+          "recall_at_3": 0.8,
+          "avg_latency_ms": 14.776,
+          "leaks": 0
+        },
+        "cross_company": {
+          "n": 6,
+          "answerable": 3,
+          "pass": 2,
+          "recall_at_1": 0.333,
+          "recall_at_3": 0.667,
+          "avg_latency_ms": 16.103,
+          "leaks": 0
+        },
+        "injection": {
+          "n": 4,
+          "answerable": 2,
+          "pass": 1,
+          "recall_at_1": 0.5,
+          "recall_at_3": 0.5,
+          "avg_latency_ms": 19.788,
+          "leaks": 0
+        },
+        "not_covered": {
+          "n": 10,
+          "answerable": 0,
+          "pass": 0,
+          "recall_at_1": null,
+          "recall_at_3": null,
+          "avg_latency_ms": 14.947,
+          "leaks": 0
+        }
+      },
+      "by_company": {
+        "acme": {
+          "n": 30,
+          "answerable": 25,
+          "pass": 18,
+          "recall_at_1": 0.613,
+          "recall_at_3": 0.8,
+          "avg_latency_ms": 16.882,
+          "leaks": 0
+        },
+        "bolt": {
+          "n": 30,
+          "answerable": 26,
+          "pass": 20,
+          "recall_at_1": 0.545,
+          "recall_at_3": 0.833,
+          "avg_latency_ms": 16.517,
+          "leaks": 0
+        },
+        "crest": {
+          "n": 30,
+          "answerable": 24,
+          "pass": 20,
+          "recall_at_1": 0.479,
+          "recall_at_3": 0.875,
+          "avg_latency_ms": 19.394,
+          "leaks": 0
+        }
+      },
+      "failed": [
+        "acme-14",
+        "acme-18",
+        "acme-19",
+        "acme-20",
+        "acme-21",
+        "acme-22",
+        "acme-30",
+        "bolt-10",
+        "bolt-14",
+        "bolt-18",
+        "bolt-19",
+        "bolt-20",
+        "bolt-21",
+        "crest-18",
+        "crest-21",
+        "crest-26",
+        "crest-29"
+      ]
+    },
+    {
+      "label": "bge-base-en-v1.5 + prefix",
+      "model": "BAAI/bge-base-en-v1.5",
+      "query_prefix": "Represent this sentence for searching relevant passages: ",
+      "passage_prefix": "",
+      "load_s": 0.46,
+      "index_s": 4.88,
+      "gap": 0.145,
+      "best_distance_answerable": 0.314,
+      "best_distance_not_covered": 0.46,
+      "overall": {
+        "n": 90,
+        "answerable": 75,
+        "pass": 61,
+        "recall_at_1": 0.567,
+        "recall_at_3": 0.869,
+        "avg_latency_ms": 25.828,
+        "leaks": 0
+      },
+      "by_category": {
+        "direct": {
+          "n": 18,
+          "answerable": 18,
+          "pass": 18,
+          "recall_at_1": 0.75,
+          "recall_at_3": 1.0,
+          "avg_latency_ms": 21.832,
+          "leaks": 0
+        },
+        "paraphrase": {
+          "n": 24,
+          "answerable": 24,
+          "pass": 22,
+          "recall_at_1": 0.646,
+          "recall_at_3": 0.917,
+          "avg_latency_ms": 27.61,
+          "leaks": 0
+        },
+        "same_section": {
+          "n": 10,
+          "answerable": 10,
+          "pass": 8,
+          "recall_at_1": 0.417,
+          "recall_at_3": 0.85,
+          "avg_latency_ms": 27.328,
+          "leaks": 0
+        },
+        "multi_hop": {
+          "n": 13,
+          "answerable": 13,
+          "pass": 6,
+          "recall_at_1": 0.41,
+          "recall_at_3": 0.744,
+          "avg_latency_ms": 32.457,
+          "leaks": 0
+        },
+        "edge": {
+          "n": 5,
+          "answerable": 5,
+          "pass": 4,
+          "recall_at_1": 0.6,
+          "recall_at_3": 0.8,
+          "avg_latency_ms": 19.66,
+          "leaks": 0
+        },
+        "cross_company": {
+          "n": 6,
+          "answerable": 3,
+          "pass": 2,
+          "recall_at_1": 0.333,
+          "recall_at_3": 0.667,
+          "avg_latency_ms": 23.307,
+          "leaks": 0
+        },
+        "injection": {
+          "n": 4,
+          "answerable": 2,
+          "pass": 1,
+          "recall_at_1": 0.0,
+          "recall_at_3": 0.5,
+          "avg_latency_ms": 28.77,
+          "leaks": 0
+        },
+        "not_covered": {
+          "n": 10,
+          "answerable": 0,
+          "pass": 0,
+          "recall_at_1": null,
+          "recall_at_3": null,
+          "avg_latency_ms": 22.046,
+          "leaks": 0
+        }
+      },
+      "by_company": {
+        "acme": {
+          "n": 30,
+          "answerable": 25,
+          "pass": 19,
+          "recall_at_1": 0.653,
+          "recall_at_3": 0.84,
+          "avg_latency_ms": 26.34,
+          "leaks": 0
+        },
+        "bolt": {
+          "n": 30,
+          "answerable": 26,
+          "pass": 23,
+          "recall_at_1": 0.506,
+          "recall_at_3": 0.91,
+          "avg_latency_ms": 25.759,
+          "leaks": 0
+        },
+        "crest": {
+          "n": 30,
+          "answerable": 24,
+          "pass": 19,
+          "recall_at_1": 0.542,
+          "recall_at_3": 0.854,
+          "avg_latency_ms": 25.385,
+          "leaks": 0
+        }
+      },
+      "failed": [
+        "acme-14",
+        "acme-18",
+        "acme-19",
+        "acme-20",
+        "acme-22",
+        "acme-30",
+        "bolt-11",
+        "bolt-19",
+        "bolt-20",
+        "crest-16",
+        "crest-18",
+        "crest-21",
+        "crest-26",
+        "crest-29"
+      ]
+    },
+    {
+      "label": "nomic-embed-v1.5",
+      "model": "nomic-ai/nomic-embed-text-v1.5",
+      "query_prefix": "",
+      "passage_prefix": "",
+      "load_s": 0.68,
+      "index_s": 7.32,
+      "gap": 0.122,
+      "best_distance_answerable": 0.268,
+      "best_distance_not_covered": 0.39,
+      "overall": {
+        "n": 90,
+        "answerable": 75,
+        "pass": 64,
+        "recall_at_1": 0.627,
+        "recall_at_3": 0.891,
+        "avg_latency_ms": 27.143,
+        "leaks": 0
+      },
+      "by_category": {
+        "direct": {
+          "n": 18,
+          "answerable": 18,
+          "pass": 18,
+          "recall_at_1": 0.806,
+          "recall_at_3": 1.0,
+          "avg_latency_ms": 21.869,
+          "leaks": 0
+        },
+        "paraphrase": {
+          "n": 24,
+          "answerable": 24,
+          "pass": 22,
+          "recall_at_1": 0.771,
+          "recall_at_3": 0.917,
+          "avg_latency_ms": 27.389,
+          "leaks": 0
+        },
+        "same_section": {
+          "n": 10,
+          "answerable": 10,
+          "pass": 8,
+          "recall_at_1": 0.417,
+          "recall_at_3": 0.9,
+          "avg_latency_ms": 29.995,
+          "leaks": 0
+        },
+        "multi_hop": {
+          "n": 13,
+          "answerable": 13,
+          "pass": 8,
+          "recall_at_1": 0.372,
+          "recall_at_3": 0.756,
+          "avg_latency_ms": 35.68,
+          "leaks": 0
+        },
+        "edge": {
+          "n": 5,
+          "answerable": 5,
+          "pass": 4,
+          "recall_at_1": 0.8,
+          "recall_at_3": 0.8,
+          "avg_latency_ms": 21.38,
+          "leaks": 0
+        },
+        "cross_company": {
+          "n": 6,
+          "answerable": 3,
+          "pass": 3,
+          "recall_at_1": 0.333,
+          "recall_at_3": 1.0,
+          "avg_latency_ms": 25.797,
+          "leaks": 0
+        },
+        "injection": {
+          "n": 4,
+          "answerable": 2,
+          "pass": 1,
+          "recall_at_1": 0.0,
+          "recall_at_3": 0.5,
+          "avg_latency_ms": 31.675,
+          "leaks": 0
+        },
+        "not_covered": {
+          "n": 10,
+          "answerable": 0,
+          "pass": 0,
+          "recall_at_1": null,
+          "recall_at_3": null,
+          "avg_latency_ms": 23.968,
+          "leaks": 0
+        }
+      },
+      "by_company": {
+        "acme": {
+          "n": 30,
+          "answerable": 25,
+          "pass": 19,
+          "recall_at_1": 0.533,
+          "recall_at_3": 0.82,
+          "avg_latency_ms": 25.968,
+          "leaks": 0
+        },
+        "bolt": {
+          "n": 30,
+          "answerable": 26,
+          "pass": 23,
+          "recall_at_1": 0.718,
+          "recall_at_3": 0.917,
+          "avg_latency_ms": 26.959,
+          "leaks": 0
+        },
+        "crest": {
+          "n": 30,
+          "answerable": 24,
+          "pass": 22,
+          "recall_at_1": 0.625,
+          "recall_at_3": 0.938,
+          "avg_latency_ms": 28.501,
+          "leaks": 0
+        }
+      },
+      "failed": [
+        "acme-14",
+        "acme-18",
+        "acme-19",
+        "acme-20",
+        "acme-21",
+        "acme-30",
+        "bolt-11",
+        "bolt-19",
+        "bolt-20",
+        "crest-16",
+        "crest-26"
+      ]
+    },
+    {
+      "label": "nomic-embed-v1.5 + prefix",
+      "model": "nomic-ai/nomic-embed-text-v1.5",
+      "query_prefix": "search_query: ",
+      "passage_prefix": "search_document: ",
+      "load_s": 0.68,
+      "index_s": 8.9,
+      "gap": 0.111,
+      "best_distance_answerable": 0.248,
+      "best_distance_not_covered": 0.359,
+      "overall": {
+        "n": 90,
+        "answerable": 75,
+        "pass": 64,
+        "recall_at_1": 0.64,
+        "recall_at_3": 0.891,
+        "avg_latency_ms": 30.013,
+        "leaks": 0
+      },
+      "by_category": {
+        "direct": {
+          "n": 18,
+          "answerable": 18,
+          "pass": 18,
+          "recall_at_1": 0.75,
+          "recall_at_3": 1.0,
+          "avg_latency_ms": 26.691,
+          "leaks": 0
+        },
+        "paraphrase": {
+          "n": 24,
+          "answerable": 24,
+          "pass": 22,
+          "recall_at_1": 0.854,
+          "recall_at_3": 0.917,
+          "avg_latency_ms": 30.626,
+          "leaks": 0
+        },
+        "same_section": {
+          "n": 10,
+          "answerable": 10,
+          "pass": 9,
+          "recall_at_1": 0.417,
+          "recall_at_3": 0.9,
+          "avg_latency_ms": 30.605,
+          "leaks": 0
+        },
+        "multi_hop": {
+          "n": 13,
+          "answerable": 13,
+          "pass": 7,
+          "recall_at_1": 0.372,
+          "recall_at_3": 0.756,
+          "avg_latency_ms": 38.133,
+          "leaks": 0
+        },
+        "edge": {
+          "n": 5,
+          "answerable": 5,
+          "pass": 4,
+          "recall_at_1": 0.8,
+          "recall_at_3": 0.8,
+          "avg_latency_ms": 25.442,
+          "leaks": 0
+        },
+        "cross_company": {
+          "n": 6,
+          "answerable": 3,
+          "pass": 3,
+          "recall_at_1": 0.333,
+          "recall_at_3": 1.0,
+          "avg_latency_ms": 30.307,
+          "leaks": 0
+        },
+        "injection": {
+          "n": 4,
+          "answerable": 2,
+          "pass": 1,
+          "recall_at_1": 0.0,
+          "recall_at_3": 0.5,
+          "avg_latency_ms": 31.39,
+          "leaks": 0
+        },
+        "not_covered": {
+          "n": 10,
+          "answerable": 0,
+          "pass": 0,
+          "recall_at_1": null,
+          "recall_at_3": null,
+          "avg_latency_ms": 24.927,
+          "leaks": 0
+        }
+      },
+      "by_company": {
+        "acme": {
+          "n": 30,
+          "answerable": 25,
+          "pass": 19,
+          "recall_at_1": 0.573,
+          "recall_at_3": 0.84,
+          "avg_latency_ms": 31.323,
+          "leaks": 0
+        },
+        "bolt": {
+          "n": 30,
+          "answerable": 26,
+          "pass": 23,
+          "recall_at_1": 0.718,
+          "recall_at_3": 0.897,
+          "avg_latency_ms": 30.154,
+          "leaks": 0
+        },
+        "crest": {
+          "n": 30,
+          "answerable": 24,
+          "pass": 22,
+          "recall_at_1": 0.625,
+          "recall_at_3": 0.938,
+          "avg_latency_ms": 28.561,
+          "leaks": 0
+        }
+      },
+      "failed": [
+        "acme-14",
+        "acme-18",
+        "acme-19",
+        "acme-20",
+        "acme-22",
+        "acme-30",
+        "bolt-11",
+        "bolt-19",
+        "bolt-20",
+        "crest-19",
+        "crest-26"
+      ]
+    },
+    {
+      "label": "nomic-embed-v1.5 int8",
+      "model": "nomic-ai/nomic-embed-text-v1.5-Q",
+      "query_prefix": "",
+      "passage_prefix": "",
+      "load_s": 0.28,
+      "index_s": 2.91,
+      "gap": 0.124,
+      "best_distance_answerable": 0.276,
+      "best_distance_not_covered": 0.4,
+      "overall": {
+        "n": 90,
+        "answerable": 75,
+        "pass": 62,
+        "recall_at_1": 0.6,
+        "recall_at_3": 0.878,
+        "avg_latency_ms": 12.342,
+        "leaks": 0
+      },
+      "by_category": {
+        "direct": {
+          "n": 18,
+          "answerable": 18,
+          "pass": 18,
+          "recall_at_1": 0.75,
+          "recall_at_3": 1.0,
+          "avg_latency_ms": 10.712,
+          "leaks": 0
+        },
+        "paraphrase": {
+          "n": 24,
+          "answerable": 24,
+          "pass": 22,
+          "recall_at_1": 0.729,
+          "recall_at_3": 0.917,
+          "avg_latency_ms": 12.824,
+          "leaks": 0
+        },
+        "same_section": {
+          "n": 10,
+          "answerable": 10,
+          "pass": 8,
+          "recall_at_1": 0.417,
+          "recall_at_3": 0.9,
+          "avg_latency_ms": 13.047,
+          "leaks": 0
+        },
+        "multi_hop": {
+          "n": 13,
+          "answerable": 13,
+          "pass": 6,
+          "recall_at_1": 0.372,
+          "recall_at_3": 0.679,
+          "avg_latency_ms": 15.563,
+          "leaks": 0
+        },
+        "edge": {
+          "n": 5,
+          "answerable": 5,
+          "pass": 4,
+          "recall_at_1": 0.8,
+          "recall_at_3": 0.8,
+          "avg_latency_ms": 10.09,
+          "leaks": 0
+        },
+        "cross_company": {
+          "n": 6,
+          "answerable": 3,
+          "pass": 3,
+          "recall_at_1": 0.0,
+          "recall_at_3": 1.0,
+          "avg_latency_ms": 11.13,
+          "leaks": 0
+        },
+        "injection": {
+          "n": 4,
+          "answerable": 2,
+          "pass": 1,
+          "recall_at_1": 0.5,
+          "recall_at_3": 0.5,
+          "avg_latency_ms": 13.46,
+          "leaks": 0
+        },
+        "not_covered": {
+          "n": 10,
+          "answerable": 0,
+          "pass": 0,
+          "recall_at_1": null,
+          "recall_at_3": null,
+          "avg_latency_ms": 10.634,
+          "leaks": 0
+        }
+      },
+      "by_company": {
+        "acme": {
+          "n": 30,
+          "answerable": 25,
+          "pass": 19,
+          "recall_at_1": 0.533,
+          "recall_at_3": 0.82,
+          "avg_latency_ms": 12.709,
+          "leaks": 0
+        },
+        "bolt": {
+          "n": 30,
+          "answerable": 26,
+          "pass": 23,
+          "recall_at_1": 0.641,
+          "recall_at_3": 0.917,
+          "avg_latency_ms": 12.299,
+          "leaks": 0
+        },
+        "crest": {
+          "n": 30,
+          "answerable": 24,
+          "pass": 20,
+          "recall_at_1": 0.625,
+          "recall_at_3": 0.896,
+          "avg_latency_ms": 12.018,
+          "leaks": 0
+        }
+      },
+      "failed": [
+        "acme-14",
+        "acme-18",
+        "acme-19",
+        "acme-20",
+        "acme-21",
+        "acme-30",
+        "bolt-11",
+        "bolt-19",
+        "bolt-20",
+        "crest-16",
+        "crest-18",
+        "crest-20",
+        "crest-26"
+      ]
+    },
+    {
+      "label": "nomic-embed-v1.5 int8 + prefix",
+      "model": "nomic-ai/nomic-embed-text-v1.5-Q",
+      "query_prefix": "search_query: ",
+      "passage_prefix": "search_document: ",
+      "load_s": 0.28,
+      "index_s": 3.05,
+      "gap": 0.108,
+      "best_distance_answerable": 0.253,
+      "best_distance_not_covered": 0.36,
+      "overall": {
+        "n": 90,
+        "answerable": 75,
+        "pass": 61,
+        "recall_at_1": 0.587,
+        "recall_at_3": 0.871,
+        "avg_latency_ms": 14.593,
+        "leaks": 0
+      },
+      "by_category": {
+        "direct": {
+          "n": 18,
+          "answerable": 18,
+          "pass": 18,
+          "recall_at_1": 0.694,
+          "recall_at_3": 1.0,
+          "avg_latency_ms": 12.589,
+          "leaks": 0
+        },
+        "paraphrase": {
+          "n": 24,
+          "answerable": 24,
+          "pass": 22,
+          "recall_at_1": 0.771,
+          "recall_at_3": 0.917,
+          "avg_latency_ms": 16.447,
+          "leaks": 0
+        },
+        "same_section": {
+          "n": 10,
+          "answerable": 10,
+          "pass": 8,
+          "recall_at_1": 0.417,
+          "recall_at_3": 0.9,
+          "avg_latency_ms": 14.659,
+          "leaks": 0
+        },
+        "multi_hop": {
+          "n": 13,
+          "answerable": 13,
+          "pass": 5,
+          "recall_at_1": 0.372,
+          "recall_at_3": 0.641,
+          "avg_latency_ms": 17.032,
+          "leaks": 0
+        },
+        "edge": {
+          "n": 5,
+          "answerable": 5,
+          "pass": 4,
+          "recall_at_1": 0.8,
+          "recall_at_3": 0.8,
+          "avg_latency_ms": 12.078,
+          "leaks": 0
+        },
+        "cross_company": {
+          "n": 6,
+          "answerable": 3,
+          "pass": 3,
+          "recall_at_1": 0.0,
+          "recall_at_3": 1.0,
+          "avg_latency_ms": 12.945,
+          "leaks": 0
+        },
+        "injection": {
+          "n": 4,
+          "answerable": 2,
+          "pass": 1,
+          "recall_at_1": 0.0,
+          "recall_at_3": 0.5,
+          "avg_latency_ms": 15.85,
+          "leaks": 0
+        },
+        "not_covered": {
+          "n": 10,
+          "answerable": 0,
+          "pass": 0,
+          "recall_at_1": null,
+          "recall_at_3": null,
+          "avg_latency_ms": 12.26,
+          "leaks": 0
+        }
+      },
+      "by_company": {
+        "acme": {
+          "n": 30,
+          "answerable": 25,
+          "pass": 18,
+          "recall_at_1": 0.493,
+          "recall_at_3": 0.8,
+          "avg_latency_ms": 14.57,
+          "leaks": 0
+        },
+        "bolt": {
+          "n": 30,
+          "answerable": 26,
+          "pass": 22,
+          "recall_at_1": 0.679,
+          "recall_at_3": 0.897,
+          "avg_latency_ms": 15.405,
+          "leaks": 0
+        },
+        "crest": {
+          "n": 30,
+          "answerable": 24,
+          "pass": 21,
+          "recall_at_1": 0.583,
+          "recall_at_3": 0.917,
+          "avg_latency_ms": 13.805,
+          "leaks": 0
+        }
+      },
+      "failed": [
+        "acme-14",
+        "acme-18",
+        "acme-19",
+        "acme-20",
+        "acme-21",
+        "acme-22",
+        "acme-30",
+        "bolt-11",
+        "bolt-18",
+        "bolt-19",
+        "bolt-20",
+        "crest-17",
+        "crest-18",
+        "crest-26"
+      ]
+    }
+  ]
+}
