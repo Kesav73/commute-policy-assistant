@@ -47,3 +47,4 @@ python3.12 -m venv .venv && .venv/bin/pip install -r requirements.txt
 - [Problem statement and requirement checklist](docs/PS.md)
 - [High-level design](docs/HLD.md)
 - [Policy ground truth](docs/POLICY_MATRIX.md)
+- [Engineering journey: every experiment and its results](docs/journey/README.md)
