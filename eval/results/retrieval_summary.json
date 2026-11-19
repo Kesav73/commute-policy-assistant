@@ -1,0 +1,248 @@
+{
+  "generated_at": "2026-11-19 00:31:52",
+  "gate_threshold": 0.75,
+  "top_k": 3,
+  "overall": {
+    "n": 90,
+    "pass": 72,
+    "answerable": 75,
+    "recall_at_3": 0.8266666666666667,
+    "hit_at_1": 0.6533333333333333,
+    "mrr": 0.7688888888888888,
+    "precision_at_3": 0.5733333333333334,
+    "gate_misses": 0,
+    "not_covered": 15,
+    "gate_caught": 0,
+    "leaks": 0
+  },
+  "by_category": {
+    "direct": {
+      "n": 18,
+      "pass": 16,
+      "answerable": 18,
+      "recall_at_3": 0.9166666666666666,
+      "hit_at_1": 0.7777777777777778,
+      "mrr": 0.8611111111111112,
+      "precision_at_3": 0.6111111111111112,
+      "gate_misses": 0,
+      "not_covered": 0,
+      "gate_caught": 0,
+      "leaks": 0
+    },
+    "paraphrase": {
+      "n": 24,
+      "pass": 20,
+      "answerable": 24,
+      "recall_at_3": 0.8333333333333334,
+      "hit_at_1": 0.5833333333333334,
+      "mrr": 0.7013888888888888,
+      "precision_at_3": 0.4861111111111111,
+      "gate_misses": 0,
+      "not_covered": 0,
+      "gate_caught": 0,
+      "leaks": 0
+    },
+    "same_section": {
+      "n": 10,
+      "pass": 8,
+      "answerable": 10,
+      "recall_at_3": 0.9,
+      "hit_at_1": 0.9,
+      "mrr": 0.95,
+      "precision_at_3": 0.8333333333333334,
+      "gate_misses": 0,
+      "not_covered": 0,
+      "gate_caught": 0,
+      "leaks": 0
+    },
+    "multi_hop": {
+      "n": 13,
+      "pass": 6,
+      "answerable": 13,
+      "recall_at_3": 0.7307692307692307,
+      "hit_at_1": 0.5384615384615384,
+      "mrr": 0.7564102564102565,
+      "precision_at_3": 0.5384615384615384,
+      "gate_misses": 0,
+      "not_covered": 0,
+      "gate_caught": 0,
+      "leaks": 0
+    },
+    "edge": {
+      "n": 5,
+      "pass": 3,
+      "answerable": 5,
+      "recall_at_3": 0.6,
+      "hit_at_1": 0.4,
+      "mrr": 0.5,
+      "precision_at_3": 0.4666666666666666,
+      "gate_misses": 0,
+      "not_covered": 0,
+      "gate_caught": 0,
+      "leaks": 0
+    },
+    "cross_company": {
+      "n": 6,
+      "pass": 6,
+      "answerable": 3,
+      "recall_at_3": 1.0,
+      "hit_at_1": 0.6666666666666666,
+      "mrr": 0.8333333333333334,
+      "precision_at_3": 0.6666666666666666,
+      "gate_misses": 0,
+      "not_covered": 3,
+      "gate_caught": 0,
+      "leaks": 0
+    },
+    "injection": {
+      "n": 4,
+      "pass": 3,
+      "answerable": 2,
+      "recall_at_3": 0.5,
+      "hit_at_1": 0.5,
+      "mrr": 0.5,
+      "precision_at_3": 0.3333333333333333,
+      "gate_misses": 0,
+      "not_covered": 2,
+      "gate_caught": 0,
+      "leaks": 0
+    },
+    "not_covered": {
+      "n": 10,
+      "pass": 10,
+      "answerable": 0,
+      "recall_at_3": NaN,
+      "hit_at_1": NaN,
+      "mrr": NaN,
+      "precision_at_3": NaN,
+      "gate_misses": 0,
+      "not_covered": 10,
+      "gate_caught": 0,
+      "leaks": 0
+    }
+  },
+  "by_company": {
+    "acme": {
+      "n": 30,
+      "pass": 22,
+      "answerable": 25,
+      "recall_at_3": 0.76,
+      "hit_at_1": 0.68,
+      "mrr": 0.76,
+      "precision_at_3": 0.6,
+      "gate_misses": 0,
+      "not_covered": 5,
+      "gate_caught": 0,
+      "leaks": 0
+    },
+    "bolt": {
+      "n": 30,
+      "pass": 25,
+      "answerable": 26,
+      "recall_at_3": 0.8653846153846154,
+      "hit_at_1": 0.6538461538461539,
+      "mrr": 0.782051282051282,
+      "precision_at_3": 0.5512820512820512,
+      "gate_misses": 0,
+      "not_covered": 4,
+      "gate_caught": 0,
+      "leaks": 0
+    },
+    "crest": {
+      "n": 30,
+      "pass": 25,
+      "answerable": 24,
+      "recall_at_3": 0.8541666666666666,
+      "hit_at_1": 0.625,
+      "mrr": 0.7638888888888888,
+      "precision_at_3": 0.5694444444444444,
+      "gate_misses": 0,
+      "not_covered": 6,
+      "gate_caught": 0,
+      "leaks": 0
+    }
+  },
+  "by_difficulty": {
+    "easy": {
+      "n": 18,
+      "pass": 16,
+      "answerable": 18,
+      "recall_at_3": 0.9166666666666666,
+      "hit_at_1": 0.7777777777777778,
+      "mrr": 0.8611111111111112,
+      "precision_at_3": 0.6111111111111112,
+      "gate_misses": 0,
+      "not_covered": 0,
+      "gate_caught": 0,
+      "leaks": 0
+    },
+    "medium": {
+      "n": 40,
+      "pass": 35,
+      "answerable": 33,
+      "recall_at_3": 0.8636363636363636,
+      "hit_at_1": 0.696969696969697,
+      "mrr": 0.7828282828282828,
+      "precision_at_3": 0.5959595959595959,
+      "gate_misses": 0,
+      "not_covered": 7,
+      "gate_caught": 0,
+      "leaks": 0
+    },
+    "hard": {
+      "n": 32,
+      "pass": 21,
+      "answerable": 24,
+      "recall_at_3": 0.7083333333333334,
+      "hit_at_1": 0.5,
+      "mrr": 0.6805555555555555,
+      "precision_at_3": 0.5138888888888888,
+      "gate_misses": 0,
+      "not_covered": 8,
+      "gate_caught": 0,
+      "leaks": 0
+    }
+  },
+  "latency_ms": {
+    "p50": 13.0,
+    "p95": 17.2,
+    "max": 21.0
+  },
+  "gate_sweep": [
+    {
+      "threshold": 0.55,
+      "answerable_wrongly_blocked": 12,
+      "not_covered_caught": 14
+    },
+    {
+      "threshold": 0.6,
+      "answerable_wrongly_blocked": 6,
+      "not_covered_caught": 11
+    },
+    {
+      "threshold": 0.65,
+      "answerable_wrongly_blocked": 3,
+      "not_covered_caught": 8
+    },
+    {
+      "threshold": 0.7,
+      "answerable_wrongly_blocked": 1,
+      "not_covered_caught": 4
+    },
+    {
+      "threshold": 0.75,
+      "answerable_wrongly_blocked": 0,
+      "not_covered_caught": 0
+    },
+    {
+      "threshold": 0.8,
+      "answerable_wrongly_blocked": 0,
+      "not_covered_caught": 0
+    },
+    {
+      "threshold": 0.85,
+      "answerable_wrongly_blocked": 0,
+      "not_covered_caught": 0
+    }
+  ]
+}
