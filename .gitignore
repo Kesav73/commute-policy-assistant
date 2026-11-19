@@ -1,0 +1,14 @@
+# Company-provided brief documents (not ours to publish)
+casestudies/
+
+# Secrets
+.env
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+
+# Runtime data (vector store, registry DB)
+data/
