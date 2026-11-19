@@ -14,7 +14,7 @@ def _test_env(monkeypatch, tmp_path):
     monkeypatch.setenv("DATA_DIR", str(tmp_path / "data"))
     # Tests never call a real LLM: no quota used, no key needed, deterministic (PS.md G2).
     monkeypatch.setenv("LLM_PROVIDER", "fake")
-    for var in ("LLM_MODEL", "LLM_FALLBACK_MODEL", "GROQ_API_KEY", "GEMINI_API_KEY"):
+    for var in ("LLM_MODEL", "LLM_FALLBACK_MODEL", "GROQ_API_KEY"):
         monkeypatch.delenv(var, raising=False)
     get_settings.cache_clear()
     yield

@@ -39,7 +39,7 @@ class Settings:
     policies_dir: Path
     chroma_dir: Path
     retrieval_max_distance: float
-    llm_provider: str          # "groq" | "gemini" | "fake"
+    llm_provider: str          # "groq" | "fake"
     llm_model: str             # primary
     llm_fallback_model: str    # used for the 2nd (and last) call
     llm_api_key: str
@@ -102,7 +102,6 @@ def get_settings() -> Settings:
 # injection; gpt-oss-120b is a different model with its own rate limits.
 LLM_DEFAULTS = {
     "groq": ("qwen/qwen3.8-27b", "openai/gpt-oss-120b", "GROQ_API_KEY"),
-    "gemini": ("gemini-flash-lite-latest", "gemini-flash-latest", "GEMINI_API_KEY"),
     "fake": ("fake-primary", "fake-fallback", ""),
 }
 

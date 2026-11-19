@@ -20,7 +20,6 @@ Outputs  eval/results/e2e.jsonl (id, input, expected, actual, pass, notes)
 """
 import argparse
 import json
-import statistics
 import tempfile
 import time
 from collections import Counter, defaultdict

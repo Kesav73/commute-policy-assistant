@@ -1,5 +1,4 @@
 """POST /ask end to end over HTTP: token -> company -> pipeline -> JSON response."""
-import json
 from pathlib import Path
 
 import pytest

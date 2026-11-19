@@ -71,7 +71,7 @@ An HTTP service where an employee, identified by a JWT, asks a question about co
 | Auth | **PyJWT**, HS256 | Small, standard; we are our own issuer so a shared secret is enough | RS256 (better when issuer ≠ verifier; overkill here) |
 | Vector store | **Chroma, embedded** (`PersistentClient`) | Required; embedded = no extra container → fewer things to break in `docker compose up` | Chroma server container (more realistic, more moving parts) |
 | Embeddings | **all-MiniLM-L6-v2 (ONNX, via Chroma's default)** | Free, local, ~10 ms per query, no PyTorch → small image; baked into the Docker image at build time | OpenAI/Gemini embeddings (network call, quota, latency) |
-| LLM | **Groq: `qwen/qwen3.8-27b` primary, `openai/gpt-oss-120b` fallback**; Gemini (alt provider); **Fake** (tests/offline) | Benchmarked (`eval/bench_llm.py`, real prompts): Qwen p95 0.4–0.7 s and resisted the planted injection; gpt-oss-120b p95 0.94 s, a separate model with its own rate limits; gpt-oss-20b once obeyed the injection. Groq = fastest free tier. One OpenAI-compatible client, swap by env var | Gemini free Flash (~20 req/day, too low), local Ollama (slow on CPU, hurts C1) |
+| LLM | **Groq: `qwen/qwen3.8-27b` primary, `openai/gpt-oss-120b` fallback**; **Fake** (tests/offline) | Benchmarked (`eval/bench_llm.py`, real prompts): Qwen p95 0.4–0.7 s and resisted the planted injection; gpt-oss-120b p95 0.94 s, a separate model with its own rate limits; gpt-oss-20b once obeyed the injection. Groq = fastest free tier. One OpenAI-compatible client, swap by env var | Gemini free Flash (~20 req/day, too low), local Ollama (slow on CPU, hurts C1) |
 | Bonus retrieval | **BM25 (`rank_bm25`) + vector, fused with RRF** | Cheap, explainable, helps exact terms ("no-show", "Saturday") | Cross-encoder rerank (slower), query rewrite (costs our 2nd LLM call) |
 | Tests | **pytest + FakeLLM** | G2: no quota or network needed | — |
 | Packaging | **Docker Compose**, one service | D2: one command | — |
@@ -235,7 +235,7 @@ Threats: text inside a policy (Crest §7 "SYSTEM OVERRIDE…") or inside the que
 **Known limit:** an 8B model can still be partly swayed *within* the caller's own company's text (e.g. repeat "trips are free" while citing §7). The validator can't fully judge semantics. We measure it in eval and report it honestly.
 
 ### 7.3 Secrets (G5)
-`JWT_SECRET`, `GROQ_API_KEY` and `GEMINI_API_KEY` come from the environment or `.env` (git-ignored). `.env.example` is committed with blanks.
+`JWT_SECRET`, and `GROQ_API_KEY` come from the environment or `.env` (git-ignored). `.env.example` is committed with blanks.
 
 **JWT signing key** (`app/config.py`):
 | Situation | Behaviour |
@@ -302,7 +302,7 @@ class LLM(Protocol):
 ```
 | Implementation | Used for |
 |---|---|
-| `OpenAICompatLLM` | Groq (default when `GROQ_API_KEY` is set) or Gemini (`LLM_PROVIDER=gemini`); both speak the OpenAI chat API, so one class with plain `httpx` |
+| `OpenAICompatLLM` | Groq (default when `GROQ_API_KEY` is set) via its OpenAI-compatible chat API: one class with plain `httpx`, so another OpenAI-compatible provider is a one-line `BASE_URLS` entry |
 | `FakeLLM` | Tests and offline mode: deterministic. It answers from S1 if present, can be scripted to time out, return garbage, or cite bad labels |
 
 With **no key**, the service starts in **offline mode** (`/health` shows `llm_provider: fake`). The tests and the eval still run, so the reviewer's 10-minute check never depends on our API quota (G2).
@@ -347,22 +347,26 @@ Judging is **deterministic string and section checks, not an LLM judge**. That m
 ## 13. Project layout
 ```
 app/
-  main.py          routes only
-  config.py        env settings
-  auth.py          JWT issue/verify, Principal
-  schemas.py       request/response models (extra="forbid")
-  policy_parser.py front matter + sub-section chunks
+  main.py          FastAPI app: lifespan startup, request/response models, routes, error handlers
+  config.py        env settings, JWT secret, LLM provider choice
+  auth.py          JWT issue/verify, Principal, current_principal / require_admin
+  policy_parser.py front matter + one chunk per sub-section
+  embeddings.py    all-MiniLM-L6-v2 (ONNX) with dynamic padding
   store.py         Chroma: one collection per company
   ingest.py        parse → embed → store; startup seeding
-  retriever.py     vector (+ hybrid) search, company assert
-  llm.py           LLM protocol, Groq / Gemini / Fake
+  retriever.py     vector search, company re-check, evidence gate
+  llm.py           OpenAI-compatible client (Groq) + FakeLLM
   answerer.py      prompt + output validation + label→citation mapping
-  pipeline.py      the 10-step ask flow, budgets, deadline
+  pipeline.py      the ask flow: budgets, deadline, fallback
   messages.py      every user-facing string
-eval/  questions.jsonl  run.py  results.jsonl
-tests/ test_auth · test_isolation · test_ingest · test_answerer · test_failures · test_api
+eval/
+  questions.jsonl  90 hand-labelled gold cases
+  run_retrieval.py retrieval scorecard      run_e2e.py  end-to-end scorecard (D5 JSONL)
+  bench_llm.py     LLM latency benchmark    results/    committed scorecards
+tests/  test_auth · test_policy_parser · test_ingest · test_retriever · test_eval_gold
+        test_llm · test_answerer · test_pipeline · test_api
 policies/  sample_data/  docs/
-Dockerfile  docker-compose.yml  requirements.txt  .env.example  README.md  EVALUATION.md
+Dockerfile  docker-compose.yml  requirements.txt  pytest.ini  .env.example  README.md
 ```
 
 ---

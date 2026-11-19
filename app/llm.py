@@ -1,6 +1,6 @@
 """The only module that talks to an LLM.
 
-    OpenAICompatLLM  Groq or Gemini through their OpenAI-compatible chat endpoint (plain httpx)
+    OpenAICompatLLM  Groq through its OpenAI-compatible chat endpoint (plain httpx)
     FakeLLM          deterministic stand-in: tests, and offline mode when no key is set
 
 Every failure becomes one of a few LLMError types, so the pipeline can decide
@@ -18,7 +18,6 @@ from app.config import Settings
 
 BASE_URLS = {
     "groq": "https://api.groq.com/openai/v1",
-    "gemini": "https://generativelanguage.googleapis.com/v1beta/openai",
 }
 
 # Per-model request settings, matched by prefix. Reasoning is switched off / kept low:
