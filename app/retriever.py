@@ -49,22 +49,25 @@ class RetrievalResult:
     best_distance: float | None = None     # closest vector match (what the gate uses)
 
 
-def retrieve(
+@dataclass
+class Candidates:
+    """Every candidate chunk of ONE company, best first, before the top-k cut."""
+    chunks: list[RetrievedChunk]
+    best_distance: float | None            # closest vector match (what the gate uses)
+    timings_ms: dict = field(default_factory=dict)
+
+
+def rank_candidates(
     store: PolicyStore,
     company_id: str,
     question: str,
-    k: int = TOP_K,
-    max_distance: float | None = None,
     mode: str | None = None,          # "vector" | "hybrid"; default from settings
-) -> RetrievalResult:
-    k = max(1, min(k, TOP_K))
-    if max_distance is None:
-        max_distance = get_settings().retrieval_max_distance
-
+    pool: int | None = None,          # how many to rank; None = all of the company's chunks
+) -> Candidates | None:
+    """Rank the company's chunks for the question. None if the company has no policy."""
     collection = get_company_collection(store, company_id)
     if collection is None or collection.count() == 0:
-        # No policy for this company: nothing to search, nothing to leak.
-        return RetrievalResult(company_id, question, [], False, max_distance)
+        return None   # no policy for this company: nothing to search, nothing to leak
     if (collection.metadata or {}).get("embedding") != EMBEDDING_ID:
         # Vectors made by a different model/prefix would be compared with this
         # question's vector: results would be quietly wrong. Fail loudly instead
@@ -75,14 +78,14 @@ def retrieve(
     mode = mode or get_settings().retrieval_mode
     n = collection.count()
     # Hybrid ranks EVERY chunk of the company (<= ~30) by both methods, then fuses.
-    pool = n if mode == "hybrid" else min(k, n)
+    n_results = n if (mode == "hybrid" or pool is None) else min(pool, n)
 
     t0 = time.perf_counter()
     query_vector = embed_query(question)   # same model + matching prefix as ingest
     t1 = time.perf_counter()
     raw = collection.query(
         query_embeddings=query_vector,
-        n_results=pool,
+        n_results=n_results,
         include=["distances"],   # ids come back always; content comes from the chunk store
     )
     t2 = time.perf_counter()
@@ -109,6 +112,8 @@ def retrieve(
         timings["keyword"] = round((time.perf_counter() - t2) * 1000, 1)
     else:
         order = vector_order
+    if pool is not None:
+        order = order[:pool]
 
     chunks = []
     for cid in order:
@@ -118,17 +123,33 @@ def retrieve(
             section=c.section, section_title=c.section_title,
             text=c.text, distance=float(distance.get(cid, 1.0)),
         ))
-        if len(chunks) == k:
-            break
+    return Candidates(chunks, min(distance.values(), default=None), timings)
+
+
+def retrieve(
+    store: PolicyStore,
+    company_id: str,
+    question: str,
+    k: int = TOP_K,
+    max_distance: float | None = None,
+    mode: str | None = None,          # "vector" | "hybrid"; default from settings
+) -> RetrievalResult:
+    k = max(1, min(k, TOP_K))
+    if max_distance is None:
+        max_distance = get_settings().retrieval_max_distance
+
+    cand = rank_candidates(store, company_id, question, mode=mode, pool=k)
+    if cand is None:
+        return RetrievalResult(company_id, question, [], False, max_distance)
 
     # The gate always uses the closest VECTOR match, whatever the final order:
     # "is anything in this policy about this question at all?"
-    best = min(distance.values(), default=None)
+    best = cand.best_distance
     has_evidence = best is not None and best <= max_distance
     return RetrievalResult(
-        company_id=company_id, question=question, chunks=chunks,
+        company_id=company_id, question=question, chunks=cand.chunks[:k],
         has_evidence=has_evidence, max_distance=max_distance,
-        timings_ms=timings, best_distance=best,
+        timings_ms=cand.timings_ms, best_distance=best,
     )
 
 
