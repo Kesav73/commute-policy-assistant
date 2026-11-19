@@ -1,0 +1,11 @@
+# Never bake secrets or local state into the image
+.env
+data/
+casestudies/
+
+# Local tooling
+.git/
+.venv/
+**/__pycache__/
+.pytest_cache/
+eval/results/*_offline*

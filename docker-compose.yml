@@ -1,0 +1,21 @@
+# One command:  docker compose up
+#   API + Swagger UI:  http://localhost:8000/docs
+#   Tests:             docker compose run --rm app pytest -q
+#   Evaluation:        docker compose run --rm app python -m eval.run_e2e --offline
+services:
+  app:
+    build: .
+    image: commute-policy-assistant
+    ports:
+      - "8000:8000"
+    # Optional: copy .env.example to .env and set GROQ_API_KEY for real answers.
+    # Without it the service still starts, in offline mode (FakeLLM).
+    env_file:
+      - path: .env
+        required: false
+    volumes:
+      - app-data:/app/data   # Chroma files + generated JWT secret survive restarts
+    restart: unless-stopped
+
+volumes:
+  app-data:

@@ -186,4 +186,6 @@ Status is updated as we build.
 | B1–B3 | Retrieval improvement, before/after, cost | ☐ |
 | G2 | Tests run on fake LLM | ✅ conftest forces `LLM_PROVIDER=fake` |
 | G5 | No keys committed | ☐ |
-| D1–D6 | Repo, one command, README, report, JSONL, video | ☐ |
+| D1 | GitHub repo | ✅ github.com/Kesav73/commute-policy-assistant (private for now) |
+| D2 | One-command start | ✅ `docker compose up` (works with or without a key) |
+| D3–D6 | README, report, JSONL, video | 🟡 JSONL ✅ (`eval/results/e2e.jsonl`); README / report / video pending |

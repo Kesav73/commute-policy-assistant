@@ -7,14 +7,36 @@ Built for the MoveInSync AI Developer case study B. Work in progress: a full REA
 ## Stack
 Python · FastAPI · Chroma (embedded) · all-MiniLM-L6-v2 embeddings (local ONNX) · Groq (`qwen/qwen3.8-27b`, fallback `openai/gpt-oss-120b`) · JWT (HS256)
 
-## Run locally (current state)
+## Run it: one command
+```bash
+docker compose up
+```
+Then open **http://localhost:8000/docs**. The first build takes ~2–3 minutes (the embedding model is baked into the image); after that, startup takes ~5 seconds.
+
+- **No API key needed.** Without one, the service runs in **offline mode** with a deterministic fake LLM, and `/health` shows `"llm_provider": "fake"`.
+- **Real answers:** `cp .env.example .env`, set `GROQ_API_KEY` (free at https://console.groq.com/keys), then `docker compose up` again.
+
+## Check it (inside the container)
+```bash
+docker compose run --rm app pytest -q                                # 138 tests, never call a real LLM
+docker compose run --rm app python -m eval.run_retrieval             # 90-question retrieval scorecard
+docker compose run --rm app python -m eval.run_e2e --offline         # end-to-end flow, fake LLM
+docker compose run --rm app python -m eval.run_e2e                   # end-to-end with the real LLM (needs key, ~12 min)
+```
+
+## Try it
+1. `POST /auth/token` with `{"employee_id": "E-ACME-001"}` (Bolt: `E-BOLT-001`, Crest: `E-CRST-001`) and copy `access_token`.
+2. Click **Authorize** in `/docs` and paste the token.
+3. `POST /ask` with `{"question": "Can I bring a guest in the company cab?"}`. Repeat with a Bolt token to see a different, correctly cited answer.
+
+<details><summary>Without Docker</summary>
+
 ```bash
 python3.12 -m venv .venv && .venv/bin/pip install -r requirements.txt
-cp .env.example .env              # optional: add GROQ_API_KEY; without it the app runs offline with a fake LLM
-.venv/bin/uvicorn app.main:app    # ingests policies/ at startup, then open http://localhost:8000/docs
-.venv/bin/python -m pytest -q     # tests never call a real LLM
-.venv/bin/python -m eval.run_retrieval   # 90-question retrieval evaluation
+.venv/bin/uvicorn app.main:app
+.venv/bin/python -m pytest -q
 ```
+</details>
 
 ## API
 | Endpoint | Purpose |
