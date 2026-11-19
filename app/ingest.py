@@ -1,4 +1,4 @@
-"""Ingestion: policies/*.md -> parse -> validate -> embed -> Chroma.
+"""Ingestion: policies/*.md -> parse -> validate -> chunk store + embed -> Chroma.
 
 Runs automatically at app startup, and by hand with:
     python -m app.ingest
@@ -10,12 +10,10 @@ import logging
 import time
 from pathlib import Path
 
-from chromadb.api import ClientAPI
-
 from app.auth import known_companies
 from app.config import get_settings
 from app.policy_parser import Policy, PolicyParseError, parse_policy_file
-from app.store import get_client, rebuild_company_collection
+from app.store import PolicyStore, index_company, open_store
 
 log = logging.getLogger("policy_assistant")
 
@@ -51,13 +49,13 @@ def load_policies(policies_dir: Path) -> list[Policy]:
     return policies
 
 
-def ingest_all(client: ClientAPI, policies_dir: Path) -> dict[str, int]:
+def ingest_all(store: PolicyStore, policies_dir: Path) -> dict[str, int]:
     """Validate everything, then rebuild one collection per company. Returns {company: chunks}."""
     policies = load_policies(policies_dir)
     counts = {}
     for p in policies:
         started = time.perf_counter()
-        counts[p.company_id] = rebuild_company_collection(client, p.company_id, p.chunks)
+        counts[p.company_id] = index_company(store, p.company_id, p.chunks)
         log.info("ingested %s: %d chunks from %s in %.2fs",
                  p.company_id, counts[p.company_id], p.source, time.perf_counter() - started)
     return counts
@@ -67,9 +65,9 @@ def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
     s = get_settings()
     started = time.perf_counter()
-    counts = ingest_all(get_client(s.chroma_dir), s.policies_dir)
+    counts = ingest_all(open_store(s.data_dir), s.policies_dir)
     print(f"\nIngested {sum(counts.values())} chunks in {time.perf_counter() - started:.1f}s "
-          f"into {s.chroma_dir}")
+          f"into {s.data_dir}/chunks + {s.data_dir}/chroma")
     for company, n in counts.items():
         print(f"  policy__{company:<6} {n:>3} chunks")
 

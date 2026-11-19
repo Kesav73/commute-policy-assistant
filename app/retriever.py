@@ -1,10 +1,11 @@
 """Retrieval: question -> embedding -> top-k chunks from the CALLER'S company only.
 
     company_id (from the verified token, never from the request)
-        -> open ONLY collection policy__<company_id>
+        -> open ONLY collection policy__<company_id>   (ids + vectors)
         -> embed the question with the same model used at ingest
-        -> nearest k chunks by cosine distance
-        -> re-check every chunk's company_id (defence in depth)
+        -> nearest k chunk ids by cosine distance
+        -> look each id up in THIS company's chunk store (text + metadata);
+           an id it doesn't hold is dropped and logged (defence in depth)
         -> evidence gate: is the best match close enough to bother the LLM?
 
 Try it:  python -m app.retriever acme "Can I book a cab on Saturday?"
@@ -14,11 +15,9 @@ import sys
 import time
 from dataclasses import dataclass, field
 
-from chromadb.api import ClientAPI
-
 from app.config import get_settings
 from app.embeddings import embedding_function
-from app.store import get_client, get_company_collection
+from app.store import PolicyStore, get_company_collection, open_store
 
 log = logging.getLogger("policy_assistant")
 
@@ -52,7 +51,7 @@ class RetrievalResult:
 
 
 def retrieve(
-    client: ClientAPI,
+    store: PolicyStore,
     company_id: str,
     question: str,
     k: int = TOP_K,
@@ -62,7 +61,7 @@ def retrieve(
     if max_distance is None:
         max_distance = get_settings().retrieval_max_distance
 
-    collection = get_company_collection(client, company_id)
+    collection = get_company_collection(store, company_id)
     if collection is None or collection.count() == 0:
         # No policy for this company: nothing to search, nothing to leak.
         return RetrievalResult(company_id, question, [], False, max_distance)
@@ -73,23 +72,23 @@ def retrieve(
     raw = collection.query(
         query_embeddings=query_vector,
         n_results=min(k, collection.count()),
-        include=["documents", "metadatas", "distances"],
+        include=["distances"],   # ids come back always; content comes from the chunk store
     )
     t2 = time.perf_counter()
 
     chunks = []
-    for cid, doc, meta, dist in zip(raw["ids"][0], raw["documents"][0],
-                                    raw["metadatas"][0], raw["distances"][0]):
+    for cid, dist in zip(raw["ids"][0], raw["distances"][0]):
         # Defence in depth (HLD §7.1 layer 3). With one collection per company this
-        # should never fire; if it does, the chunk is dropped and loudly logged.
-        if meta.get("company_id") != company_id:
-            log.error("ISOLATION ALERT: chunk %s (company %s) found in %s's collection",
-                      cid, meta.get("company_id"), company_id)
+        # should never fire; if it does, the id is dropped and loudly logged.
+        c = store.chunks.get(company_id, cid)
+        if c is None or c.company_id != company_id:
+            log.error("ISOLATION ALERT: id %s in %s's collection is not one of %s's chunks",
+                      cid, company_id, company_id)
             continue
         chunks.append(RetrievedChunk(
-            id=cid, company_id=meta["company_id"], doc_id=meta["doc_id"], title=meta["title"],
-            section=meta["section"], section_title=meta["section_title"],
-            text=doc, distance=float(dist),
+            id=c.id, company_id=c.company_id, doc_id=c.doc_id, title=c.title,
+            section=c.section, section_title=c.section_title,
+            text=c.text, distance=float(dist),
         ))
 
     has_evidence = bool(chunks) and chunks[0].distance <= max_distance
@@ -105,7 +104,7 @@ def main() -> None:
         sys.exit('usage: python -m app.retriever <company_id> "<question>"')
     company_id, question = sys.argv[1], sys.argv[2]
     embedding_function()(["warm up"])  # load the model first, so the timing below is per-question
-    r = retrieve(get_client(get_settings().chroma_dir), company_id, question)
+    r = retrieve(open_store(get_settings().data_dir), company_id, question)
     best = f"{r.best_distance:.3f}" if r.chunks else "-"
     print(f"\n{company_id}: {question!r}")
     print(f"evidence: {'YES' if r.has_evidence else 'NO -> not covered'} "

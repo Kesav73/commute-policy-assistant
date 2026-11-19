@@ -1,4 +1,4 @@
-"""Ingestion into a real (temporary) Chroma with the real embedding model."""
+"""Ingestion into a real (temporary) chunk store + Chroma with the real embedding model."""
 import shutil
 from pathlib import Path
 
@@ -8,14 +8,14 @@ from chromadb.utils.embedding_functions import DefaultEmbeddingFunction
 
 from app.embeddings import embedding_function
 from app.ingest import IngestError, ingest_all
-from app.store import chunk_counts, get_client, get_company_collection
+from app.store import chunk_counts, get_company_collection, open_store
 
 POLICIES = Path(__file__).resolve().parent.parent / "policies"
 
 
 @pytest.fixture
-def chroma(tmp_path):
-    return get_client(tmp_path / "chroma")
+def store(tmp_path):
+    return open_store(tmp_path / "data")
 
 
 @pytest.fixture
@@ -25,65 +25,78 @@ def policies_copy(tmp_path) -> Path:
     return d
 
 
-def test_ingest_creates_one_collection_per_company(chroma):
-    assert ingest_all(chroma, POLICIES) == {"acme": 27, "bolt": 25, "crest": 19}
-    assert chunk_counts(chroma) == {"acme": 27, "bolt": 25, "crest": 19}
+def test_ingest_creates_one_collection_per_company(store):
+    assert ingest_all(store, POLICIES) == {"acme": 27, "bolt": 25, "crest": 19}
+    assert chunk_counts(store) == {"acme": 27, "bolt": 25, "crest": 19}
 
 
-def test_each_collection_holds_only_its_own_company(chroma):
-    ingest_all(chroma, POLICIES)
+def test_each_company_holds_only_its_own_chunks(store):
+    ingest_all(store, POLICIES)
     for company in ("acme", "bolt", "crest"):
-        metas = get_company_collection(chroma, company).get()["metadatas"]
-        assert {m["company_id"] for m in metas} == {company}
+        chunks = store.chunks.all(company)
+        assert {c.company_id for c in chunks.values()} == {company}
+        # the vector index and the chunk store hold exactly the same ids
+        assert set(get_company_collection(store, company).get(include=[])["ids"]) == set(chunks)
 
 
-def test_collection_uses_cosine_and_stores_citation_metadata(chroma):
-    ingest_all(chroma, POLICIES)
-    acme = get_company_collection(chroma, "acme")
+def test_vector_index_holds_only_ids_and_vectors(store):
+    ingest_all(store, POLICIES)
+    acme = get_company_collection(store, "acme")
     assert acme.configuration_json["hnsw"]["space"] == "cosine"
-    got = acme.get(ids=["acme-transport-policy:4.1"], include=["metadatas", "embeddings"])
-    assert got["metadatas"][0]["section_title"] == "Night-Shift Safety > Escort Requirement"
+    assert acme.metadata == {"company_id": "acme", "embedding_model": "all-MiniLM-L6-v2"}
+    got = acme.get(ids=["acme-transport-policy:4.1"], include=["documents", "metadatas", "embeddings"])
+    assert got["documents"] == [None] and got["metadatas"] == [None]   # no content in Chroma
     assert len(got["embeddings"][0]) == 384
 
 
-def test_ingest_twice_does_not_duplicate(chroma):
-    ingest_all(chroma, POLICIES)
-    assert ingest_all(chroma, POLICIES) == {"acme": 27, "bolt": 25, "crest": 19}
+def test_chunk_store_holds_content_and_citation_metadata(store, tmp_path):
+    ingest_all(store, POLICIES)
+    c = store.chunks.get("acme", "acme-transport-policy:4.1")
+    assert c.section == "4.1" and c.section_title == "Night-Shift Safety > Escort Requirement"
+    assert c.doc_id == "acme-transport-policy" and "8:00 PM" in c.text
+    assert (tmp_path / "data" / "chunks" / "acme.jsonl").exists()
+    assert store.chunks.get("acme", "bolt-commute-policy:4.1") is None   # not Acme's
 
 
-def test_removed_section_disappears_after_reingest(chroma, policies_copy):
-    ingest_all(chroma, policies_copy)
+def test_ingest_twice_does_not_duplicate(store):
+    ingest_all(store, POLICIES)
+    assert ingest_all(store, POLICIES) == {"acme": 27, "bolt": 25, "crest": 19}
+
+
+def test_removed_section_disappears_after_reingest(store, policies_copy):
+    ingest_all(store, policies_copy)
     f = policies_copy / "crest.md"
     f.write_text(f.read_text().replace(
         "### 8.2 Response Time\nThe transport desk acknowledges", "The transport desk acknowledges"))
-    ingest_all(chroma, policies_copy)
-    assert get_company_collection(chroma, "crest").get(ids=["crest-transport-guidelines:8.2"])["ids"] == []
+    ingest_all(store, policies_copy)
+    assert get_company_collection(store, "crest").get(ids=["crest-transport-guidelines:8.2"])["ids"] == []
+    assert store.chunks.get("crest", "crest-transport-guidelines:8.2") is None
 
 
-def test_bad_file_stops_ingest_before_anything_is_written(chroma, policies_copy):
-    ingest_all(chroma, policies_copy)
+def test_bad_file_stops_ingest_before_anything_is_written(store, policies_copy):
+    ingest_all(store, policies_copy)
     (policies_copy / "bolt.md").write_text("no front matter here")
     with pytest.raises(IngestError, match="bolt.md"):
-        ingest_all(chroma, policies_copy)
-    assert chunk_counts(chroma) == {"acme": 27, "bolt": 25, "crest": 19}  # untouched
+        ingest_all(store, policies_copy)
+    assert chunk_counts(store) == {"acme": 27, "bolt": 25, "crest": 19}  # untouched
 
 
-def test_unknown_company_is_rejected(policies_copy, chroma):
+def test_unknown_company_is_rejected(policies_copy, store):
     f = policies_copy / "crest.md"
     f.write_text(f.read_text().replace("company_id: crest", "company_id: evilcorp"))
     with pytest.raises(IngestError, match="not in the employee directory"):
-        ingest_all(chroma, policies_copy)
+        ingest_all(store, policies_copy)
 
 
-def test_two_files_for_one_company_are_rejected(policies_copy, chroma):
+def test_two_files_for_one_company_are_rejected(policies_copy, store):
     shutil.copy(policies_copy / "acme.md", policies_copy / "acme_copy.md")
     with pytest.raises(IngestError, match="already has a policy"):
-        ingest_all(chroma, policies_copy)
+        ingest_all(store, policies_copy)
 
 
-def test_unknown_company_has_no_collection(chroma):
-    ingest_all(chroma, POLICIES)
-    assert get_company_collection(chroma, "evilcorp") is None
+def test_unknown_company_has_no_collection(store):
+    ingest_all(store, POLICIES)
+    assert get_company_collection(store, "evilcorp") is None
 
 
 def test_fast_embedding_matches_chroma_default():

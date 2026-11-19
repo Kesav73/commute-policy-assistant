@@ -22,7 +22,7 @@ from app.config import get_settings
 from app.ingest import ingest_all
 from app.llm import build_llm
 from app.pipeline import ask
-from app.store import chunk_counts, get_client
+from app.store import chunk_counts, open_store
 
 log = logging.getLogger("policy_assistant")
 
@@ -37,8 +37,8 @@ async def lifespan(app: FastAPI):
         logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s %(message)s")
     log.setLevel(logging.INFO)
     s = get_settings()                       # fails fast on bad JWT_SECRET / LLM config
-    app.state.chroma = get_client(s.chroma_dir)
-    counts = ingest_all(app.state.chroma, s.policies_dir)
+    app.state.store = open_store(s.data_dir)
+    counts = ingest_all(app.state.store, s.policies_dir)
     app.state.llm = build_llm(s)
     log.info("ready: chunks=%s llm=%s (%s, fallback %s)",
              counts, s.llm_provider, s.llm_model, s.llm_fallback_model)
@@ -136,12 +136,12 @@ async def unhandled_error(request: Request, exc: Exception) -> JSONResponse:
 @app.get("/health")
 def health(request: Request) -> dict:
     s = get_settings()
-    chroma = getattr(request.app.state, "chroma", None)
+    store = getattr(request.app.state, "store", None)
     return {
         "status": "ok",
         "llm_provider": s.llm_provider,           # "fake" = offline mode
         "llm_models": [s.llm_model, s.llm_fallback_model],
-        "chunks_loaded": chunk_counts(chroma) if chroma else {},
+        "chunks_loaded": chunk_counts(store) if store else {},
     }
 
 
@@ -180,7 +180,7 @@ def ask_endpoint(body: AskRequest, request: Request,
     company_id comes ONLY from the verified token (principal). Sync def on purpose:
     FastAPI runs it in a worker thread, so the blocking LLM call doesn't stall the server.
     """
-    result = ask(request.app.state.chroma, request.app.state.llm,
+    result = ask(request.app.state.store, request.app.state.llm,
                  principal.company_id, body.question)
 
     if result.status == "unavailable":

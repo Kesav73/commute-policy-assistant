@@ -8,7 +8,7 @@ from app import messages
 from app.ingest import ingest_all
 from app.llm import FakeLLM, LLMTimeout
 from app.main import app
-from app.store import get_client
+from app.store import open_store
 from tests.conftest import bearer
 
 POLICIES = Path(__file__).resolve().parent.parent / "policies"
@@ -16,8 +16,8 @@ Q = {"question": "Do women get an escort on late drops?"}
 
 
 @pytest.fixture(scope="module")
-def chroma(tmp_path_factory):
-    client = get_client(tmp_path_factory.mktemp("chroma"))
+def store(tmp_path_factory):
+    client = open_store(tmp_path_factory.mktemp("data"))
     ingest_all(client, POLICIES)
     return client
 
@@ -28,11 +28,11 @@ def llm():
 
 
 @pytest.fixture(autouse=True)
-def _app_state(chroma, llm):
+def _app_state(store, llm):
     """Skip the startup hook (slow re-ingest per test); give the app its store and LLM directly."""
-    app.state.chroma, app.state.llm = chroma, llm
+    app.state.store, app.state.llm = store, llm
     yield
-    del app.state.chroma, app.state.llm
+    del app.state.store, app.state.llm
 
 
 @pytest.fixture

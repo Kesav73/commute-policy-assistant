@@ -13,6 +13,7 @@ from typing import Any
 import numpy as np
 from chromadb.utils.embedding_functions.onnx_mini_lm_l6_v2 import ONNXMiniLM_L6_V2
 
+EMBEDDING_MODEL = "all-MiniLM-L6-v2"  # recorded on every collection
 MAX_TOKENS = 256  # sentence-transformers' limit for this model; longer text is cut
 
 

@@ -33,7 +33,7 @@ from app.config import get_settings
 from app.ingest import ingest_all
 from app.policy_parser import parse_policy_file
 from app.retriever import TOP_K, retrieve
-from app.store import get_client
+from app.store import open_store
 
 EVAL_DIR = Path(__file__).resolve().parent
 QUESTIONS = EVAL_DIR / "questions.jsonl"
@@ -167,13 +167,13 @@ def main() -> None:
 
     # Fresh, throwaway store: the score never depends on leftover local data.
     with tempfile.TemporaryDirectory() as tmp:
-        client = get_client(Path(tmp))
-        ingest_all(client, s.policies_dir)
-        retrieve(client, cases[0]["company"], "warm up")   # load the model before timing
+        store = open_store(Path(tmp))
+        ingest_all(store, s.policies_dir)
+        retrieve(store, cases[0]["company"], "warm up")   # load the model before timing
         rows = []
         for c in cases:
             t0 = time.perf_counter()
-            r = retrieve(client, c["company"], c["question"])
+            r = retrieve(store, c["company"], c["question"])
             latency_ms = (time.perf_counter() - t0) * 1000
             ranked = [ch.section for ch in r.chunks]
             leaks = [ch.id for ch in r.chunks if ch.company_id != c["company"]]

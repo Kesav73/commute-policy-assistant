@@ -37,7 +37,6 @@ class Settings:
     employees_file: Path
     data_dir: Path
     policies_dir: Path
-    chroma_dir: Path
     retrieval_max_distance: float
     llm_provider: str          # "groq" | "fake"
     llm_model: str             # primary
@@ -88,7 +87,6 @@ def get_settings() -> Settings:
         ),
         data_dir=data_dir,
         policies_dir=Path(os.getenv("POLICIES_DIR", PROJECT_ROOT / "policies")),
-        chroma_dir=data_dir / "chroma",
         # Evidence gate: if even the best chunk is further than this (cosine distance),
         # answer "not covered" without calling the LLM. Conservative on purpose: only
         # clearly unrelated questions are cut here; borderline ones go to the LLM.

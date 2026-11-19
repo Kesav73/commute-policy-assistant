@@ -20,7 +20,7 @@ A running log of every experiment and improvement: what we tried, how we measure
 
 | Configuration | recall@1 | recall@3 | avg latency | Entry |
 |---|---|---|---|---|
-| Sub-section chunks + all-MiniLM-L6-v2, top 3, cosine | 0.55 | 0.82 | 5.1 ms | [05](05-gold-set-audit-and-baseline.md) |
+| Sub-section chunks + all-MiniLM-L6-v2, top 3, cosine; separate chunk store | 0.55 | 0.82 | 4.4 ms | [06](06-separate-chunk-store.md) |
 
 ## Index
 
@@ -31,3 +31,4 @@ A running log of every experiment and improvement: what we tried, how we measure
 | 03 | 2026-11-19 | [Evidence gate threshold](03-evidence-gate.md) | Kept conservative at 0.75; the LLM decides borderline cases |
 | 04 | 2026-11-19 | [First end-to-end evaluation](04-first-e2e-eval.md) | 72/90 pass, 0 leaks, p95 0.83 s; most failures come from retrieval |
 | 05 | 2026-11-19 | [Gold set audit and new retrieval baseline](05-gold-set-audit-and-baseline.md) | 4 labels fixed; baseline recall@1 0.55, recall@3 0.82, 5.1 ms |
+| 06 | 2026-11-19 | [Separate chunk store](06-separate-chunk-store.md) | Chroma holds ids + vectors only; same recall, ~10% faster |

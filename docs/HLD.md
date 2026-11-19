@@ -42,9 +42,11 @@ An HTTP service where an employee, identified by a JWT, asks a question about co
  Anyone ────────────►  POST /auth/token (mock issuer)   GET /health                         │
                          └──────────────────────────────────────────────────────────────────┘
 
- Ingest (command, run at startup):  policies/*.md ──► parse → chunk → embed → Chroma
+ Ingest (command, run at startup):  policies/*.md ──► parse → chunk ──► chunk store
+                                                                 └► embed ──► Chroma
 
-        Storage:  data/chroma/  (vector store, one collection per company)
+        Storage:  data/chunks/<company>.jsonl  (chunk store: id → text + metadata, source of truth)
+                  data/chroma/                 (vector index: id → vector, one collection per company)
                   sample_data/employees.json  (mock HR directory)
 ```
 
@@ -155,16 +157,26 @@ title: Acme Corp Employee Transport Policy
 effective_date: 2026-01-01
 ```
 
-### 5.2 Chunk (in Chroma)
+### 5.2 Chunk: content in the chunk store, vector in Chroma
 **One chunk = one sub-section** (`### 5.1`). A section with no sub-sections (Crest §7) is one chunk. That gives 18–27 chunks per company, with each chunk being one rule, about 30–90 words.
 
-| Field | Example | Purpose |
+Content and vectors are stored **separately**, joined by the chunk id:
+
+| Store | Holds | File |
 |---|---|---|
-| `id` | `acme-transport-policy:5.1` | Deterministic → re-ingest is idempotent |
-| `document` (embedded text) | `"Weekend and Holiday Transport > No Weekend Service: Company transport is not provided on Saturdays…"` | Section and sub-section titles + body, so the headings help matching |
-| metadata `company_id` | `acme` | Defence-in-depth check after retrieval |
-| metadata `doc_id`, `title` | | Citation |
-| metadata `section`, `section_title` | `5.1`, `Weekend and Holiday Transport > No Weekend Service` | Citation |
+| **Chunk store** (`app/chunk_store.py`) | id → all fields below. The single source of truth for what the LLM sees and what gets cited | `data/chunks/<company>.jsonl`, written atomically (temp file + rename) |
+| **Vector index** (Chroma) | id → vector, **nothing else**. Collection metadata records `company_id` and `embedding_model` | `data/chroma/` |
+
+| Chunk field | Example | Purpose |
+|---|---|---|
+| `id` | `acme-transport-policy:5.1` | Deterministic → re-ingest is idempotent; the join key between the two stores |
+| `company_id` | `acme` | Defence-in-depth check after retrieval |
+| `doc_id`, `title` | `acme-transport-policy`, `Acme Corp Employee Transport Policy` | Citation |
+| `section`, `section_title` | `5.1`, `Weekend and Holiday Transport > No Weekend Service` | Citation |
+| `body` | rule text only | |
+| `text` (what is embedded) | `"Weekend and Holiday Transport > No Weekend Service\nCompany transport is not provided…"` | Titles + body, so the headings help matching |
+
+**Why separate?** The embedding model can be swapped, or several compared, without touching the content; the content can be inspected as a plain file; and the post-retrieval company check reads the chunk store, which the vector index cannot influence. Cost: one in-memory dictionary lookup per retrieved id, and a check at ingest that both stores hold exactly the same ids.
 
 ### 5.3 Collections: one per company
 ```
@@ -187,7 +199,8 @@ The collection name is built in code from the token's `company_id`: `f"policy__{
  2. Input guard    trim; 3–500 chars; reject empty / control chars       [422]
  3. Resolve        collection = "policy__acme"  (from token)             [missing → not_covered]
  4. Retrieve       embed question → top-3 from THAT collection only
- 5. Assert         every chunk.metadata.company_id == "acme"             [else: drop + log ALERT]
+ 5. Resolve ids    look each id up in acme's chunk store; not there or     [else: drop + log ALERT]
+                  company_id != "acme"
  6. Evidence gate  best similarity < τ  → not_covered (0 LLM calls)
  7. Answer         1 LLM call; excerpts labelled [S1] [S2] [S3]; JSON out
  8. Validate       parse JSON; status ∈ {answered, not_covered};
@@ -204,8 +217,9 @@ The collection name is built in code from the token's `company_id`: `f"policy__{
  1. Parse     front matter (company_id, doc_id, title) + ### sub-sections      [invalid → stop, clear error]
  2. Validate  company exists in directory; ≥ 1 chunk; chunk ids unique
  3. Embed     each chunk's text with the local model
- 4. Store     upsert into collection policy__<company_id>  (deterministic ids → no duplicates)
- 5. Verify    collection.count() == number of chunks
+ 4. Store     chunk store: data/chunks/<company_id>.jsonl (atomic replace)
+              vector index: rebuild collection policy__<company_id> with ids + vectors only
+ 5. Verify    the collection's ids == the chunk store's ids
 ```
 Runs automatically at startup and is idempotent, so restarting the container doesn't duplicate anything. This is what makes `docker compose up` alone produce a working, populated service. It can also be run by hand: `python -m app.ingest`.
 
@@ -218,7 +232,7 @@ Runs automatically at startup and is idempotent, so restarting the container doe
 |---|---|
 | 1. Identity | `company_id` only from a verified JWT; no request field exists for it (`extra="forbid"`) |
 | 2. Retrieval scope | Retriever opens **only** `policy__{principal.company_id}` |
-| 3. Post-retrieval assert | Each chunk's metadata `company_id` is re-checked; a mismatch is dropped and logged as an alert |
+| 3. Post-retrieval assert | Each retrieved id is looked up in the caller's own chunk store and its `company_id` re-checked; an id that isn't there, or a mismatch, is dropped and logged as an alert |
 | 4. Output mapping | Citations are built from the retrieved chunks by code, so the model can't cite something it wasn't given |
 
 ### 7.2 Prompt injection (R8)
@@ -354,8 +368,9 @@ app/
   auth.py          JWT issue/verify, Principal, current_principal / require_admin
   policy_parser.py front matter + one chunk per sub-section
   embeddings.py    all-MiniLM-L6-v2 (ONNX) with dynamic padding
-  store.py         Chroma: one collection per company
-  ingest.py        parse → embed → store; startup seeding
+  chunk_store.py   chunk content (id → text + metadata), one JSONL per company
+  store.py         Chroma: ids + vectors, one collection per company
+  ingest.py        parse → chunk store + embed → Chroma; startup seeding
   retriever.py     vector search, company re-check, evidence gate
   llm.py           OpenAI-compatible client (Groq) + FakeLLM
   answerer.py      prompt + output validation + label→citation mapping

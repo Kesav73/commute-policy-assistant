@@ -15,13 +15,13 @@ import time
 import uuid
 from dataclasses import dataclass, field
 
-from chromadb.api import ClientAPI
 
 from app import messages
 from app.answerer import SYSTEM_PROMPT, Citation, InvalidOutput, build_user_prompt, parse_answer
 from app.config import Settings, get_settings
 from app.llm import LLM, LLMError, build_llm
 from app.retriever import retrieve
+from app.store import PolicyStore
 
 log = logging.getLogger("policy_assistant")
 
@@ -42,7 +42,7 @@ class AskResult:
     timings_ms: dict = field(default_factory=dict)
 
 
-def ask(chroma: ClientAPI, llm: LLM, company_id: str, question: str,
+def ask(store: PolicyStore, llm: LLM, company_id: str, question: str,
         settings: Settings | None = None) -> AskResult:
     s = settings or get_settings()
     rid = uuid.uuid4().hex[:12]
@@ -62,7 +62,7 @@ def ask(chroma: ClientAPI, llm: LLM, company_id: str, question: str,
     timings: dict = {}
     retrieved: list[dict] = []
     try:
-        r = retrieve(chroma, company_id, question)
+        r = retrieve(store, company_id, question)
     except Exception:
         log.exception("retrieval failed rid=%s", rid)
         return done("unavailable", messages.TRY_AGAIN, [], "retrieval error")
@@ -110,11 +110,11 @@ def main() -> None:
     if len(sys.argv) != 3:
         sys.exit('usage: python -m app.pipeline <company_id> "<question>"')
     from app.embeddings import embedding_function
-    from app.store import get_client
+    from app.store import open_store
 
     s = get_settings()
     embedding_function()(["warm up"])
-    res = ask(get_client(s.chroma_dir), build_llm(s), sys.argv[1], sys.argv[2], s)
+    res = ask(open_store(s.data_dir), build_llm(s), sys.argv[1], sys.argv[2], s)
     print(f"\n[{sys.argv[1]}] {sys.argv[2]}")
     print(f"status   : {res.status}")
     print(f"answer   : {res.answer}")
