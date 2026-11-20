@@ -56,6 +56,7 @@ Policy versions live in the `app-data` volume and survive restarts. `docker comp
 | `POST /admin/policies` | Admin token (e.g. `A-ACME-ADM`) + `{"markdown": "..."}` → publishes a new version of the admin's company policy on the running service; reports which sections changed |
 
 ## Docs
+- [Evaluation report: scenarios, method, results, limitations, trade-offs](EVALUATION.md)
 - [Problem statement and requirement checklist](docs/PS.md)
 - [High-level design](docs/HLD.md)
 - [Policy ground truth](docs/POLICY_MATRIX.md)

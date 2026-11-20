@@ -2,7 +2,7 @@
 
     python -m eval.run_e2e                 # configured LLM (Groq when GROQ_API_KEY is set)
     python -m eval.run_e2e --offline       # FakeLLM: no key, no quota (plumbing check only)
-    python -m eval.run_e2e --pace 8        # seconds between LLM-backed questions (rate limits)
+    python -m eval.run_e2e --pace 20       # seconds between LLM-backed questions (default 20: free-tier limit)
     python -m eval.run_e2e --only acme-01,bolt-19
 
 Path per question (exactly what an employee hits):
@@ -256,8 +256,9 @@ def print_scorecard(s: dict, provider: str, models: list[str]) -> None:
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--offline", action="store_true", help="use FakeLLM (no key, no quota)")
-    ap.add_argument("--pace", type=float, default=7.5,
-                    help="seconds to wait after each LLM-backed question (Groq free tier: 8K tokens/min)")
+    ap.add_argument("--pace", type=float, default=20.0,
+                    help="seconds to wait after each LLM-backed question: Groq's free tier allows 8K "
+                         "tokens/min and a question with rewriting uses ~2.5K (2 calls)")
     ap.add_argument("--only", help="comma-separated case ids to run")
     ap.add_argument("--no-cache", action="store_true",
                     help="always call the LLM (default: reuse responses stored in eval/results/llm_cache.jsonl)")
