@@ -235,6 +235,7 @@ docs/               architecture, design decisions, requirements checklist, poli
 
 ## Docs
 
+- [Video_Demo.mp4](Video_Demo.mp4): a 2-minute screen recording of it working
 - [EVALUATION.md](EVALUATION.md): test scenarios, method, results, before and after, limitations, trade-offs
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md): components, the ask and publish flows, storage, time limits
 - [docs/DESIGN_DECISIONS.md](docs/DESIGN_DECISIONS.md): every decision with why, alternatives and cost
