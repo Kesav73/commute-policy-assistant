@@ -29,15 +29,32 @@ python3.12 -m venv .venv && .venv/bin/pip install -r requirements.txt
 
 ## Check it
 
+**One command** runs everything a reviewer needs, inside Docker, with no API key:
 ```bash
-docker compose run --rm app pytest -q                          # 217 tests (~20 s), fake LLM, no key needed
-docker compose run --rm app python -m eval.run_retrieval       # retrieval scorecard, no key needed
-docker compose run --rm app python -m eval.run_e2e --offline   # every eval question through POST /ask, fake LLM
+./check.sh        # tests + retrieval scorecard + end-to-end evaluation (fake LLM), then a PASS/FAIL summary
+```
+Or step by step:
+```bash
+docker compose run --rm app pytest -q                          # 217 tests (~20 s), fake LLM
+docker compose run --rm app python -m eval.run_retrieval       # retrieval scorecard (recall@1, recall@3, latency)
+docker compose run --rm app python -m eval.run_e2e --offline   # all 90 questions through POST /ask, fake LLM (checks the
+                                                               #   flow runs; canned answers, so its pass rate isn't our score)
 docker compose run --rm app python -m eval.run_e2e             # same with the real LLM (needs GROQ_API_KEY, ~35 min)
 ```
-- **Evaluation set:** `eval/questions.jsonl` (90 hand-written questions).
-- **Results**, one line per case with `id, input, expected, actual, pass, notes`: `eval/results/e2e.jsonl` (answers) and `eval/results/retrieval.jsonl` (retrieval).
-- **Report:** [EVALUATION.md](EVALUATION.md).
+
+**The evaluation set in the required format** (one line per case: `id, input, expected, actual, pass, notes`):
+- `eval/results/e2e.jsonl`: our final run with the real LLM, **83 / 90 passed** (scorecard in `e2e_summary.json`)
+- `eval/results/retrieval.jsonl`: the retrieval scores for the same 90 questions
+- they are generated from `eval/questions.jsonl`: the 90 hand-written questions with their labels (expected status, sections, required and forbidden facts)
+- method, results and known failures: [EVALUATION.md](EVALUATION.md)
+
+In Docker the scores are printed but the regenerated files stay inside the throwaway container. To write fresh result files to disk, run without Docker:
+```bash
+python3.12 -m venv .venv && .venv/bin/pip install -r requirements.txt
+.venv/bin/python -m eval.run_retrieval        # -> eval/results/retrieval.jsonl
+.venv/bin/python -m eval.run_e2e              # -> eval/results/e2e.jsonl   (with GROQ_API_KEY in .env)
+.venv/bin/python -m eval.run_e2e --offline    # -> eval/results/e2e_offline.jsonl (fake LLM)
+```
 
 ## Try it
 

@@ -67,6 +67,7 @@ A chunk from another company in the results fails the case outright.
 ## How to rerun
 
 ```bash
+./check.sh                                                     # all of the no-key checks below, with a PASS/FAIL summary
 docker compose run --rm app pytest -q                          # 217 tests, no API key needed
 docker compose run --rm app python -m eval.run_retrieval       # retrieval scorecard, no key needed
 docker compose run --rm app python -m eval.run_e2e --offline   # full /ask flow with the fake LLM, no key

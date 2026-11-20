@@ -9,3 +9,4 @@ casestudies/
 **/__pycache__/
 .pytest_cache/
 eval/results/*_offline*
+eval/results/llm_cache.jsonl
