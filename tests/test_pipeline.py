@@ -25,7 +25,14 @@ def store(tmp_path_factory):
 
 @pytest.fixture
 def settings():
-    return get_settings()
+    """Answer-call logic (call 1 answers, call 2 is the fallback): QUERY_REWRITE=off.
+    The rewrite path (call 1 rewrites, call 2 answers) is tested at the end."""
+    return replace(get_settings(), query_rewrite=False)
+
+
+@pytest.fixture
+def rw_settings():
+    return replace(get_settings(), query_rewrite=True)
 
 
 def good(cites=("S1",)) -> str:
@@ -122,3 +129,44 @@ def test_retrieval_crash_is_try_again(settings):
 
     r = ask(Broken(), FakeLLM(), "acme", Q, settings)
     assert r.status == "unavailable" and r.answer == messages.TRY_AGAIN
+
+
+# ------------------------------------------------- QUERY_REWRITE=on (default) --
+
+REWRITE = json.dumps({"queries": ["cancellation window", "no-show penalty suspension"]})
+
+
+def answer(label="S1"):
+    return json.dumps({"status": "answered", "answer": "See the policy.", "citations": [label]})
+
+
+def test_rewrite_is_the_default():
+    assert get_settings().query_rewrite is True
+
+
+def test_rewrite_then_answer_uses_two_calls_and_rewritten_chunks(store, rw_settings):
+    llm = FakeLLM(script=[REWRITE, answer()])
+    r = ask(store, llm, "acme", "If I cancel my drop one hour before, will I be suspended?", rw_settings)
+    assert r.status == "answered" and r.llm_calls == 2
+    assert "<outline>" in llm.calls[0]["user"]                         # call 1 = rewrite
+    assert {"3.1", "9.2"} <= {x["section"] for x in r.retrieved}      # chunks from the rewrites
+    assert '<excerpt id="S1"' in llm.calls[1]["user"]                  # call 2 = answer
+
+
+def test_failed_rewrite_falls_back_to_original_chunks(store, rw_settings):
+    llm = FakeLLM(script=[LLMTimeout("slow"), answer()])
+    r = ask(store, llm, "acme", Q, rw_settings)
+    assert r.status == "answered" and r.llm_calls == 2 and "rewrite: LLMTimeout" in r.reason
+
+
+def test_no_fallback_after_rewrite_never_a_third_call(store, rw_settings):
+    llm = FakeLLM(script=[REWRITE, LLMUnavailable("down"), answer()])
+    r = ask(store, llm, "acme", Q, rw_settings)
+    assert r.status == "unavailable" and r.answer == messages.TRY_AGAIN
+    assert len(llm.calls) == 2 <= MAX_LLM_CALLS
+
+
+def test_gate_stops_off_topic_before_any_rewrite(store, rw_settings):
+    llm = FakeLLM()
+    r = ask(store, llm, "acme", "Write me a poem about cats", rw_settings)
+    assert r.status == "not_covered" and llm.calls == []

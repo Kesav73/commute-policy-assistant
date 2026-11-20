@@ -39,6 +39,7 @@ Outputs  eval/results/e2e.jsonl          one line per case: id, input, expected,
          eval/results/e2e_summary.json   the scorecard numbers
 """
 import argparse
+import hashlib
 import json
 import tempfile
 import time
@@ -54,6 +55,41 @@ from app.ingest import ingest_all
 from app.llm import FakeLLM, build_llm
 from app.store import open_store
 from eval.run_retrieval import CATEGORIES, QUESTIONS, RESULTS_DIR, load_questions, validate_gold
+
+LLM_CACHE = RESULTS_DIR / "llm_cache.jsonl"
+
+
+class CachingLLM:
+    """Wraps the real LLM for the eval: a response is stored under a hash of
+    (model, system prompt, user prompt). Re-running after a change that doesn't
+    alter a prompt (e.g. a code-only guardrail) re-uses the stored response and
+    costs no tokens. Errors are never cached. `hits` counts cached calls, so
+    latency stats can exclude them (a cached call takes ~0 ms)."""
+
+    def __init__(self, llm, path: Path = LLM_CACHE):
+        self.llm, self.path, self.hits, self.provider = llm, path, 0, getattr(llm, "provider", "")
+        self.store = {}
+        if path.exists():
+            for line in path.read_text().splitlines():
+                if line.strip():
+                    row = json.loads(line)
+                    self.store[row["key"]] = row["raw"]
+
+    @staticmethod
+    def key(system: str, user: str, model: str) -> str:
+        return hashlib.sha256(f"{model}\n{system}\n{user}".encode()).hexdigest()
+
+    def complete_json(self, system: str, user: str, model: str, timeout_s: float) -> str:
+        k = self.key(system, user, model)
+        if k in self.store:
+            self.hits += 1
+            return self.store[k]
+        raw = self.llm.complete_json(system, user, model, timeout_s)
+        self.store[k] = raw
+        with open(self.path, "a") as f:
+            f.write(json.dumps({"key": k, "model": model, "raw": raw}) + "\n")
+        return raw
+
 
 EMPLOYEE_FOR = {"acme": "E-ACME-001", "bolt": "E-BOLT-001", "crest": "E-CRST-001"}
 DOC_FOR = {"acme": "acme-transport-policy", "bolt": "bolt-commute-policy",
@@ -150,8 +186,10 @@ def summarise(rows: list[dict]) -> dict:
     for r in rows:
         groups["category"][r["expected"]["category"]].append(r)
         groups["company"][r["input"]["company"]].append(r)
-    lat = [r["actual"]["latency_ms"] for r in rows]
-    lat_llm = [r["actual"]["latency_ms"] for r in rows if r["actual"]["llm_calls"] > 0]
+    # Cached LLM responses take ~0 ms, so they'd flatter latency: measure only live calls.
+    live = [r for r in rows if not r["actual"].get("llm_cached")] or rows
+    lat = [r["actual"]["latency_ms"] for r in live]
+    lat_llm = [r["actual"]["latency_ms"] for r in live if r["actual"]["llm_calls"] > 0]
     calls = Counter(r["actual"]["llm_calls"] for r in rows)
     conf = Counter(f'{r["expected"]["status"]}->{r["actual"]["status"]}' for r in rows)
     complete = [r for r in rows if r["expected"]["status"] == "answered" and r["_retrieval_complete"]]
@@ -170,6 +208,7 @@ def summarise(rows: list[dict]) -> dict:
             "llm_calls": {str(k): v for k, v in sorted(calls.items())},
             "max_llm_calls": max(calls),
             "max_citations": max(len(r["actual"]["citations"]) for r in rows),
+            "latency_measured_on": f"{len(live)} live questions ({len(rows) - len(live)} from LLM cache)",
         },
         "failure_causes": {c: sum(r["_cause"] == c for r in rows) for c in CAUSES},
         "status_confusion": dict(sorted(conf.items())),
@@ -195,6 +234,7 @@ def print_scorecard(s: dict, provider: str, models: list[str]) -> None:
     print(f"   latency, LLM-backed    : {b['latency_ms_with_llm']}   (C1: p95 < 3000 ms)")
     print(f"   LLM calls per question : {b['llm_calls']}   max {b['max_llm_calls']} (C2: <= 2)")
     print(f"   max citations          : {b['max_citations']} (C3: <= 3)")
+    print(f"   latency measured on    : {b['latency_measured_on']}")
     print(f"4. Failure causes\n   {s['failure_causes']}")
     print(f"   status confusion (expected->actual): {s['status_confusion']}")
     print(f"\n{'by category':16}{'pass':>9}{'status':>9}{'facts':>9}{'citation':>10}")
@@ -216,6 +256,11 @@ def main() -> None:
     ap.add_argument("--pace", type=float, default=7.5,
                     help="seconds to wait after each LLM-backed question (Groq free tier: 8K tokens/min)")
     ap.add_argument("--only", help="comma-separated case ids to run")
+    ap.add_argument("--no-cache", action="store_true",
+                    help="always call the LLM (default: reuse responses stored in eval/results/llm_cache.jsonl)")
+    ap.add_argument("--max-unavailable-streak", type=int, default=5,
+                    help="stop the run after this many 'unavailable' answers in a row "
+                         "(network/provider outage: the rest of the run would be meaningless)")
     args = ap.parse_args()
 
     s = get_settings()
@@ -226,6 +271,9 @@ def main() -> None:
         cases = [c for c in cases if c["id"] in wanted]
 
     llm = FakeLLM() if args.offline else build_llm(s)
+    cache = None
+    if not args.offline and not args.no_cache:
+        llm = cache = CachingLLM(llm)
     provider = "fake" if args.offline else s.llm_provider
     models = ["fake"] if provider == "fake" else [s.llm_model, s.llm_fallback_model]
     pace = 0 if provider == "fake" else args.pace
@@ -247,14 +295,16 @@ def main() -> None:
             embed_query("warm up")
             main_module.app.state.store, main_module.app.state.llm = store, llm
             client = TestClient(main_module.app, raise_server_exceptions=False)
-            tokens = {co: client.post("/auth/token", json={"employee_id": e}).json()["access_token"]
-                      for co, e in EMPLOYEE_FOR.items()}
+            def token(company):   # fresh token per question: a long run can't outlive the TTL
+                return client.post("/auth/token", json={"employee_id": EMPLOYEE_FOR[company]}).json()["access_token"]
 
+            streak = 0
             for i, case in enumerate(cases, 1):
                 captured.pop("last", None)
+                hits_before = cache.hits if cache else 0
                 t0 = time.perf_counter()
                 r = client.post("/ask", json={"question": case["question"]},
-                                headers={"Authorization": f"Bearer {tokens[case['company']]}"})
+                                headers={"Authorization": f"Bearer {token(case['company'])}"})
                 latency = (time.perf_counter() - t0) * 1000
                 res = captured.get("last")
                 sc = score(case, r.status_code, r.json(), res)
@@ -270,7 +320,8 @@ def main() -> None:
                                "retrieved": sc["retrieved"],
                                "llm_calls": res.llm_calls if res else 0,
                                "models": res.models if res else [],
-                               "latency_ms": round(latency, 1)},
+                               "latency_ms": round(latency, 1),
+                               "llm_cached": bool(cache and cache.hits > hits_before)},
                     "pass": sc["pass"],
                     "notes": "; ".join(([f"cause: {sc['cause']}"] if sc["cause"] else []) + sc["notes"]) or "ok",
                     "_checks": sc["checks"], "_cause": sc["cause"],
@@ -278,7 +329,11 @@ def main() -> None:
                 })
                 print(f"[{i:>2}/{len(cases)}] {'PASS' if sc['pass'] else 'FAIL'} {case['id']:9} "
                       f"{latency:6.0f} ms  {sc['status']:12} {rows[-1]['notes'][:80]}", flush=True)
-                if res and res.llm_calls and i < len(cases):
+                streak = streak + 1 if sc["status"] == "unavailable" else 0
+                if streak >= args.max_unavailable_streak:
+                    raise SystemExit(f"\nABORTED: {streak} 'unavailable' answers in a row (network or "
+                                     "provider outage). Results not written; rerun when it's back.")
+                if res and res.llm_calls and i < len(cases) and not rows[-1]["actual"]["llm_cached"]:
                     time.sleep(pace)
     finally:
         main_module.ask = real_ask

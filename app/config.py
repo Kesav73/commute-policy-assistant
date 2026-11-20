@@ -39,12 +39,14 @@ class Settings:
     policies_dir: Path
     retrieval_max_distance: float
     retrieval_mode: str        # "vector" | "hybrid"
+    query_rewrite: bool        # LLM call 1 rewrites the question into search queries
     llm_provider: str          # "groq" | "fake"
     llm_model: str             # primary
     llm_fallback_model: str    # used for the 2nd (and last) call
     llm_api_key: str
     llm_timeout_s: float       # per call
     answer_deadline_s: float   # whole /ask budget, kept under the 3 s p95 target
+    rewrite_timeout_s: float   # cap for the rewrite call, so the answer call keeps its time
 
 
 def _load_or_create_secret(data_dir: Path) -> str:
@@ -97,6 +99,9 @@ def get_settings() -> Settings:
         # hybrid (default) = embeddings + stemmed BM25 keywords, fused with weighted RRF;
         # vector = embeddings only. See docs/journey/09.
         retrieval_mode=_retrieval_mode(),
+        # on (default): call 1 rewrites the question (docs/journey/13), call 2 answers;
+        # off: call 1 answers, call 2 is the fallback model.
+        query_rewrite=os.getenv("QUERY_REWRITE", "on").strip().lower() not in ("off", "0", "false", "no"),
         **_llm_settings(),
     )
 
@@ -135,4 +140,5 @@ def _llm_settings() -> dict:
         "llm_api_key": key,
         "llm_timeout_s": float(os.getenv("LLM_TIMEOUT_S", "2.0")),
         "answer_deadline_s": float(os.getenv("ANSWER_DEADLINE_S", "2.8")),
+        "rewrite_timeout_s": float(os.getenv("REWRITE_TIMEOUT_S", "1.2")),
     }

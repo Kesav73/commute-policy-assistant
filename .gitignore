@@ -18,3 +18,6 @@ eval/results/*_offline*
 
 # Private planning notes (not part of the submission)
 TODO.md
+
+# Eval LLM response cache (local, regenerable)
+eval/results/llm_cache.jsonl

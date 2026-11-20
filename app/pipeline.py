@@ -1,11 +1,16 @@
 """The ask flow: question -> retrieve -> gate -> LLM (max 2 calls) -> checked answer.
 
-    1. retrieve top-3 chunks from the caller's company collection only
+    1. retrieve from the caller's company only, with the ORIGINAL question
     2. evidence gate: nothing close enough -> not_covered, 0 LLM calls
-    3. call 1: primary model (Qwen)
-    4. if call 1 failed for ANY reason (timeout, rate limit, provider error,
-       unusable output) and there is time left -> call 2: fallback model (gpt-oss-120b)
-    5. never a 3rd call (PS.md C2); if both failed -> "try again"
+    With QUERY_REWRITE=on (default, docs/journey/13):
+    3. call 1: rewrite the question into 1-3 search queries (policy outline as context);
+       retrieve again with those queries, merged round-robin, top 3.
+       If the rewrite fails, keep the step-1 chunks (harmless).
+    4. call 2: answer (primary model). No fallback model is left: if it fails -> "try again".
+    With QUERY_REWRITE=off:
+    3. call 1: answer with the primary model (Qwen)
+    4. if call 1 failed for ANY reason and there is time left -> call 2: fallback model
+    Never a 3rd call (PS.md C2).
 
 Try it:  python -m app.pipeline acme "Can I book a cab on Saturday?"
 """
@@ -21,6 +26,7 @@ from app.answerer import SYSTEM_PROMPT, Citation, InvalidOutput, build_user_prom
 from app.config import Settings, get_settings
 from app.llm import LLM, LLMError, build_llm
 from app.retriever import retrieve
+from app.rewriter import rewrite_query
 from app.store import PolicyStore
 
 log = logging.getLogger("policy_assistant")
@@ -73,10 +79,35 @@ def ask(store: PolicyStore, llm: LLM, company_id: str, question: str,
         return done("not_covered", messages.NOT_COVERED, [],
                     f"gate (best distance {r.best_distance:.3f})" if r.chunks else "no policy")
 
-    # 3-5. Up to two LLM calls ----------------------------------------------------
-    user_prompt = build_user_prompt(question, r.chunks)
     models_used, failures = [], []
-    for model in (s.llm_model, s.llm_fallback_model)[:MAX_LLM_CALLS]:
+
+    # 3. Query rewrite (LLM call 1 of 2) ------------------------------------------
+    if s.query_rewrite:
+        budget = min(s.rewrite_timeout_s, deadline - time.perf_counter() - MIN_TIME_FOR_CALL_S)
+        if budget >= 0.3:
+            models_used.append(f"{s.llm_model} (rewrite)")
+            t0 = time.perf_counter()
+            rw = rewrite_query(llm, store, company_id, question, s.llm_model, budget)
+            timings["rewrite"] = round((time.perf_counter() - t0) * 1000, 1)
+            if rw.ok and rw.queries:
+                try:
+                    r = retrieve(store, company_id, question, rewrites=rw.queries,
+                                 include_original=False, fusion="round_robin")
+                    timings["retrieve_rewritten"] = r.timings_ms.get("multi_query")
+                    retrieved = [{"section": c.section, "distance": round(c.distance, 3)}
+                                 for c in r.chunks]
+                except Exception:
+                    log.exception("rewritten retrieval failed rid=%s; using original chunks", rid)
+                    failures.append("rewritten retrieval error")
+            else:
+                failures.append(f"rewrite: {rw.error or 'no queries'}")
+        else:
+            failures.append("rewrite skipped: no time")
+
+    # 4. Answer (the remaining LLM calls) -------------------------------------------
+    user_prompt = build_user_prompt(question, r.chunks)
+    answer_models = (s.llm_model, s.llm_fallback_model)[:MAX_LLM_CALLS - len(models_used)]
+    for model in answer_models:
         remaining = deadline - time.perf_counter()
         if remaining < MIN_TIME_FOR_CALL_S:
             failures.append(f"no time left for {model} ({remaining:.2f}s)")
