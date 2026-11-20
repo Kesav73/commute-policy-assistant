@@ -163,7 +163,7 @@ def health(request: Request) -> dict:
     return {
         "status": "ok",
         "llm_provider": settings.llm_provider,          # "fake" = offline mode
-        "llm_models": [PRIMARY_MODEL, FALLBACK_MODEL],
+        "llm_models": [PRIMARY_MODEL, FALLBACK_MODEL] if settings.llm_provider == "groq" else ["fake (offline)"],
         "chunks_loaded": summary["chunks"],
         "policy_versions": summary["versions"],
     }

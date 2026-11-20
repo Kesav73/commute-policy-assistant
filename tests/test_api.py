@@ -140,5 +140,5 @@ def test_unexpected_crash_is_500_without_stack_trace(acme, monkeypatch):
 
 def test_health_reports_mode_and_chunks(client):
     body = client.get("/health").json()
-    assert body["llm_provider"] == "fake"
+    assert body["llm_provider"] == "fake" and body["llm_models"] == ["fake (offline)"]
     assert body["chunks_loaded"] == {"acme": 27, "bolt": 25, "crest": 18}
