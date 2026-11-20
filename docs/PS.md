@@ -167,8 +167,8 @@ Status is updated as we build.
 | ID | Item | Status |
 |---|---|---|
 | R1 | 3 policies with contradictions | ✅ `policies/`, `docs/POLICY_MATRIX.md` |
-| R2 | Versioned ingestion | ⏸ deferred (policies fixed for now) |
-| R3 | Atomic ingest / rollback | ⏸ deferred (policies fixed for now) |
+| R2 | Versioned ingestion | ✅ `POST /admin/policies`, versions + atomic pointer (`app/versioning.py`) |
+| R3 | Atomic ingest / rollback | ✅ build beside → verify → flip; failure/crash leaves the old version (tests) |
 | R4 | JWT question API | ✅ `POST /ask` behind `current_principal` |
 | R5 | Server-side company filter, no override | ✅ collection from token; body field → 422; query/header ignored (tests) |
 | R6 | Document + section citations | ✅ `app/answerer.py` (labels → real sections, in code) |

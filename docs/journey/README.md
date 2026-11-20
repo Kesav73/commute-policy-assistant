@@ -41,3 +41,4 @@ A running log of every experiment and improvement: what we tried, how we measure
 | 13 | 2026-11-20 | [Query rewriting](13-query-rewriting.md) | LLM rewrite with policy outline + round-robin merge: recall@1 0.63 → 0.77, recall@3 0.92 → 0.98, 66 → 72/75, +0.54 s; RRF merge hurt multi-hop; not yet in /ask |
 | 14 | 2026-11-20 | [Guardrails](14-guardrails.md) | Input verdict in the rewrite call, `blocked` in the answer call, ingest quarantine (catches only Crest §7), other-company + echo checks; no extra LLM calls; number matching rejected |
 | 15 | 2026-11-20 | [Never a hang](15-no-hangs.md) | Hard limits on retrieval (1.0 s), each LLM call (total time), whole request (3.0 s backstop); forced-hang tests: 503 in 0.5 s |
+| 16 | 2026-11-20 | [Policy versioning](16-policy-versioning.md) | Build beside → verify → atomic pointer flip; live update on a running container, failures/crashes keep the old version; found + fixed a cold-start bug |

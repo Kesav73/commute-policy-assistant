@@ -16,15 +16,16 @@ from contextlib import asynccontextmanager
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app import messages
-from app.auth import Principal, UnknownEmployeeError, current_principal, issue_token
+from app.auth import Principal, UnknownEmployeeError, current_principal, issue_token, require_admin
 from app.config import get_settings
-from app.ingest import ingest_all
 from app.llm import build_llm
 from app.pipeline import ask
-from app.store import chunk_counts, open_store
+from app.retriever import warm_up
+from app.store import active_versions, chunk_counts, open_store
+from app.versioning import MAX_POLICY_CHARS, PolicyRejected, PublishFailed, bootstrap, publish_policy
 
 log = logging.getLogger("policy_assistant")
 
@@ -40,10 +41,14 @@ async def lifespan(app: FastAPI):
     log.setLevel(logging.INFO)
     s = get_settings()                       # fails fast on bad JWT_SECRET / LLM config
     app.state.store = open_store(s.data_dir)
-    counts = ingest_all(app.state.store, s.policies_dir)
+    # Seed companies with no version yet from policies/, keep existing versions (a
+    # restart never rolls back an update), remove leftovers of interrupted builds.
+    versions = bootstrap(app.state.store, s.policies_dir)
+    # Load the embedding model and indexes now, not inside the first question.
+    log.info("warm-up (ms): %s", warm_up(app.state.store))
     app.state.llm = build_llm(s)
-    log.info("ready: chunks=%s llm=%s (%s, fallback %s)",
-             counts, s.llm_provider, s.llm_model, s.llm_fallback_model)
+    log.info("ready: policy versions=%s chunks=%s llm=%s (%s, fallback %s)", versions,
+             chunk_counts(app.state.store), s.llm_provider, s.llm_model, s.llm_fallback_model)
     yield
 
 
@@ -92,6 +97,22 @@ class AskResponse(BaseModel):
     answer: str
     citations: list[CitationOut]
     request_id: str
+    policy_version: int | None = None   # the version of the company's policy that answered
+
+
+class PolicyUpload(StrictModel):
+    """A new version of the admin's OWN company's policy, as markdown (same format as
+    policies/*.md). The company is read from the file and must match the admin's token."""
+    markdown: str = Field(min_length=1, max_length=MAX_POLICY_CHARS)
+
+
+class PublishResponse(BaseModel):
+    company_id: str
+    version: int
+    previous_version: int | None
+    chunks: int
+    quarantined: list[str]
+    effective_date: str
 
 
 # ----------------------------------------------------------------- errors --
@@ -144,6 +165,7 @@ def health(request: Request) -> dict:
         "llm_provider": s.llm_provider,           # "fake" = offline mode
         "llm_models": [s.llm_model, s.llm_fallback_model],
         "chunks_loaded": chunk_counts(store) if store else {},
+        "policy_versions": active_versions(store) if store else {},
     }
 
 
@@ -213,4 +235,37 @@ async def ask_endpoint(body: AskRequest, request: Request,
         answer=result.answer,
         citations=[CitationOut(**c.__dict__) for c in result.citations],
         request_id=result.request_id,
+        policy_version=result.policy_version,
     )
+
+
+@app.post(
+    "/admin/policies",
+    response_model=PublishResponse,
+    responses={400: {"description": "Invalid policy - nothing was changed"},
+               401: {"description": "Missing or invalid token"},
+               403: {"description": "Not an admin, or not the admin's company"},
+               503: {"description": "Building the new version failed - the previous version is still active"}},
+)
+def publish_endpoint(body: PolicyUpload, request: Request,
+                     principal: Principal = Depends(require_admin)):
+    """Publish a NEW VERSION of the caller's company policy, on the running service.
+
+    Built next to the live version, verified, then switched in one atomic step:
+    from the next question on, only the new version answers. If anything fails,
+    the previous version stays active and nothing half-built is ever served.
+    The company comes ONLY from the admin's token; a file for another company -> 403.
+    """
+    try:
+        res = publish_policy(request.app.state.store, body.markdown, source="upload",
+                             expected_company=principal.company_id)
+    except PolicyRejected as e:
+        status_code = 403 if "you can only update" in str(e) else 400
+        code = "forbidden" if status_code == 403 else "invalid_policy"
+        return error(status_code, code, f"{e}. Nothing was changed.")
+    except PublishFailed as e:
+        return error(503, "publish_failed", str(e), headers={"Retry-After": "30"})
+    log.info("admin %s published %s v%d", principal.employee_id, res.company_id, res.version)
+    return PublishResponse(company_id=res.company_id, version=res.version,
+                           previous_version=res.previous_version, chunks=res.chunks,
+                           quarantined=res.quarantined, effective_date=res.effective_date)

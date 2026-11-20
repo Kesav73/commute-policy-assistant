@@ -42,7 +42,7 @@ def test_vector_index_holds_only_ids_and_vectors(store):
     ingest_all(store, POLICIES)
     acme = get_company_collection(store, "acme")
     assert acme.configuration_json["hnsw"]["space"] == "cosine"
-    assert acme.metadata == {"company_id": "acme", "embedding": EMBEDDING_ID}
+    assert acme.metadata == {"company_id": "acme", "version": 1, "embedding": EMBEDDING_ID}
     got = acme.get(ids=["acme-transport-policy:4.1"], include=["documents", "metadatas", "embeddings"])
     assert got["documents"] == [None] and got["metadatas"] == [None]   # no content in Chroma
     assert len(got["embeddings"][0]) == 768
@@ -53,7 +53,7 @@ def test_chunk_store_holds_content_and_citation_metadata(store, tmp_path):
     c = store.chunks.get("acme", "acme-transport-policy:4.1")
     assert c.section == "4.1" and c.section_title == "Night-Shift Safety > Escort Requirement"
     assert c.doc_id == "acme-transport-policy" and "8:00 PM" in c.text
-    assert (tmp_path / "data" / "chunks" / "acme.jsonl").exists()
+    assert (tmp_path / "data" / "chunks" / "acme" / "v1.jsonl").exists()
     assert store.chunks.get("acme", "bolt-commute-policy:4.1") is None   # not Acme's
 
 

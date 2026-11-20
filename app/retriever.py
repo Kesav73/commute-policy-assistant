@@ -63,9 +63,12 @@ def rank_candidates(
     question: str,
     mode: str | None = None,          # "vector" | "hybrid"; default from settings
     pool: int | None = None,          # how many to rank; None = all of the company's chunks
+    version: int | None = None,       # policy version; None = the ACTIVE one (requests pin it)
 ) -> Candidates | None:
     """Rank the company's chunks for the question. None if the company has no policy."""
-    collection = get_company_collection(store, company_id)
+    if version is None:
+        version = store.active_version(company_id)
+    collection = get_company_collection(store, company_id, version)
     if collection is None or collection.count() == 0:
         return None   # no policy for this company: nothing to search, nothing to leak
     if (collection.metadata or {}).get("embedding") != EMBEDDING_ID:
@@ -93,7 +96,7 @@ def rank_candidates(
     # company's chunks, checked before any ranking or fusion, so a foreign id is
     # caught (and logged) even when it would not make the final top k.
     # With one collection per company this should never fire.
-    own = store.chunks.all(company_id)
+    own = store.chunks.all(company_id, version)
     distance, vector_order = {}, []
     for cid, dist in zip(raw["ids"][0], raw["distances"][0]):   # best first
         c = own.get(cid)
@@ -106,7 +109,7 @@ def rank_candidates(
     timings = {"embed": round((t1 - t0) * 1000, 1), "search": round((t2 - t1) * 1000, 1)}
 
     if mode == "hybrid":
-        keyword = _bm25(store, company_id).scores(question)
+        keyword = _bm25(store, company_id, version).scores(question)
         keyword_order = sorted(keyword, key=lambda i: -keyword[i])
         order = rrf([vector_order, keyword_order], weights=[VECTOR_WEIGHT, KEYWORD_WEIGHT])
         timings["keyword"] = round((time.perf_counter() - t2) * 1000, 1)
@@ -135,6 +138,7 @@ def retrieve(
     mode: str | None = None,          # "vector" | "hybrid"; default from settings
     rewrites: list[str] | None = None,  # search queries from the query rewriter
     include_original: bool = True,      # also search with the original question
+    version: int | None = None,         # policy version to use; None = active (requests pin it)
     fusion: str = "rrf",                # how rankings of several queries are merged:
                                         #   "rrf" (agreement) | "round_robin" (coverage)
 ) -> RetrievalResult:
@@ -144,8 +148,8 @@ def retrieve(
 
     if rewrites:
         return _retrieve_multi(store, company_id, question, rewrites, k, max_distance, mode,
-                               include_original, fusion)
-    cand = rank_candidates(store, company_id, question, mode=mode, pool=k)
+                               include_original, fusion, version)
+    cand = rank_candidates(store, company_id, question, mode=mode, pool=k, version=version)
     if cand is None:
         return RetrievalResult(company_id, question, [], False, max_distance)
 
@@ -161,7 +165,7 @@ def retrieve(
 
 
 def _retrieve_multi(store, company_id, question, rewrites, k, max_distance, mode, include_original,
-                    fusion="rrf"):
+                    fusion="rrf", version=None):
     """Search with the rewritten queries (and, if include_original, the original
     question too); fuse all rankings with RRF and keep the top k.
 
@@ -172,10 +176,13 @@ def _retrieve_multi(store, company_id, question, rewrites, k, max_distance, mode
     not turn an off-topic question into "covered".
     """
     t0 = time.perf_counter()
-    original = rank_candidates(store, company_id, question, mode=mode, pool=None)
+    if version is None:
+        version = store.active_version(company_id)   # one version for every query
+    original = rank_candidates(store, company_id, question, mode=mode, pool=None, version=version)
     if original is None:
         return RetrievalResult(company_id, question, [], False, max_distance)
-    ranked = [rank_candidates(store, company_id, q, mode=mode, pool=None) for q in rewrites]
+    ranked = [rank_candidates(store, company_id, q, mode=mode, pool=None, version=version)
+              for q in rewrites]
     if include_original:
         ranked = [original, *ranked]
     by_id = {c.id: c for cand in ranked for c in cand.chunks}
@@ -189,6 +196,21 @@ def _retrieve_multi(store, company_id, question, rewrites, k, max_distance, mode
                     "queries": len(ranked)},
         best_distance=best,
     )
+
+
+def warm_up(store: PolicyStore) -> dict[str, float]:
+    """Run one retrieval per company at startup, BEFORE requests are accepted.
+
+    Loads the embedding model (~1-2 s the first time), opens every active collection
+    and builds the BM25 indexes. Without this, the first question after a restart
+    pays that cost inside retrieval and hits the 1 s retrieval limit ("try again").
+    Returns {company: ms} for the startup log."""
+    out = {}
+    for co in store.active_companies():
+        t0 = time.perf_counter()
+        retrieve(store, co, "warm up")
+        out[co] = round((time.perf_counter() - t0) * 1000, 1)
+    return out
 
 
 # --------------------------------------------------------------- hybrid --
@@ -233,16 +255,17 @@ def round_robin(rankings: list[list[str]]) -> list[str]:
     return out
 
 
-_BM25_CACHE: dict[str, tuple[int, BM25Index]] = {}
+_BM25_CACHE: dict[tuple[str, int | None], tuple[int, BM25Index]] = {}
 
 
-def _bm25(store: PolicyStore, company_id: str) -> BM25Index:
-    """Per-company BM25 index built from the chunk store; rebuilt when its chunks change."""
-    chunks = store.chunks.all(company_id)
-    cached = _BM25_CACHE.get(company_id)
+def _bm25(store: PolicyStore, company_id: str, version: int | None = None) -> BM25Index:
+    """Per-company, per-version BM25 index built from the chunk store; rebuilt when its chunks change."""
+    chunks = store.chunks.all(company_id, version)
+    key = (company_id, version)
+    cached = _BM25_CACHE.get(key)
     if cached is None or cached[0] != id(chunks):
         cached = (id(chunks), BM25Index(list(chunks), [c.text for c in chunks.values()], stem=STEM))
-        _BM25_CACHE[company_id] = cached
+        _BM25_CACHE[key] = cached
     return cached[1]
 
 

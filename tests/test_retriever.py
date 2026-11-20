@@ -116,7 +116,7 @@ def test_collection_built_with_another_embedding_is_refused(tmp_path):
     from app.store import StoreError, collection_name
     client = open_store(tmp_path / "data")
     ingest_all(client, POLICIES)
-    col = client.vectors.get_collection(collection_name("acme"))
+    col = client.vectors.get_collection(collection_name("acme", client.active_version("acme")))
     col.modify(metadata={"company_id": "acme", "embedding": "all-MiniLM-L6-v2"})
     with pytest.raises(StoreError, match="re-ingest needed"):
         retrieve(client, "acme", "Who approves an airport trip?")

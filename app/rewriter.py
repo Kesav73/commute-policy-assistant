@@ -63,9 +63,9 @@ class Rewrite:
     verdict: str = "ok"                                 # input guardrail: the model's judgement
 
 
-def policy_outline(store: PolicyStore, company_id: str) -> str:
+def policy_outline(store: PolicyStore, company_id: str, version: int | None = None) -> str:
     """'4.1 Night-Shift Safety > Escort Requirement' per line, in policy order, for ONE company."""
-    return "\n".join(f"{c.section} {c.section_title}" for c in store.chunks.all(company_id).values())
+    return "\n".join(f"{c.section} {c.section_title}" for c in store.chunks.all(company_id, version).values())
 
 
 def build_user_prompt(outline: str, question: str) -> str:
@@ -105,9 +105,9 @@ def _norm(s: str) -> str:
 
 
 def rewrite_query(llm: LLM, store: PolicyStore, company_id: str, question: str,
-                  model: str, timeout_s: float) -> Rewrite:
+                  model: str, timeout_s: float, version: int | None = None) -> Rewrite:
     """One LLM call. Never raises: on any problem returns Rewrite(ok=False)."""
-    outline = policy_outline(store, company_id)
+    outline = policy_outline(store, company_id, version)
     if not outline:
         return Rewrite(error="no policy outline")
     try:

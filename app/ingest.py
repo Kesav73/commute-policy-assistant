@@ -1,4 +1,4 @@
-"""Ingestion: policies/*.md -> parse -> validate -> chunk store + embed -> Chroma.
+"""Ingestion: policies/*.md -> parse -> validate -> publish as a new version (app/versioning.py).
 
 Runs automatically at app startup, and by hand with:
     python -m app.ingest
@@ -7,14 +7,14 @@ Order matters: ALL files are parsed and validated first, and only then is
 anything written. One bad file stops ingestion before any collection changes.
 """
 import logging
-import time
+import sys
 from pathlib import Path
 
 from app.auth import known_companies
 from app.config import get_settings
-from app.guardrails import is_instruction_like
 from app.policy_parser import Policy, PolicyParseError, parse_policy_file
-from app.store import PolicyStore, index_company, open_store
+from app.store import PolicyStore, open_store
+from app.versioning import publish_policy
 
 log = logging.getLogger("policy_assistant")
 
@@ -51,35 +51,36 @@ def load_policies(policies_dir: Path) -> list[Policy]:
 
 
 def ingest_all(store: PolicyStore, policies_dir: Path) -> dict[str, int]:
-    """Validate everything, then rebuild one collection per company. Returns {company: chunks}."""
+    """Publish every policy file as a NEW version of its company (validates ALL files
+    first, so one bad file changes nothing). Returns {company: chunks}.
+
+    For tests, evals and the CLI with the app stopped. A running app is updated
+    through POST /admin/policies, which goes through the same publish_policy()."""
     policies = load_policies(policies_dir)
     counts = {}
     for p in policies:
-        started = time.perf_counter()
-        # Guardrail (chunks): a section that gives orders to an AI is never indexed,
-        # so it can't be retrieved, shown to the model or cited, whatever is asked.
-        kept = []
-        for c in p.chunks:
-            if is_instruction_like(c.text):
-                log.warning("quarantined %s (%s): instruction-like text, not indexed",
-                            c.id, c.section_title)
-            else:
-                kept.append(c)
-        counts[p.company_id] = index_company(store, p.company_id, kept)
-        log.info("ingested %s: %d chunks from %s in %.2fs",
-                 p.company_id, counts[p.company_id], p.source, time.perf_counter() - started)
+        res = publish_policy(store, (policies_dir / p.source).read_text(encoding="utf-8"),
+                             source=p.source, old_version_grace_s=0)
+        counts[p.company_id] = res.chunks
     return counts
 
 
 def main() -> None:
+    """python -m app.ingest              re-publish every file in policies/ (new versions)
+       python -m app.ingest FILE.md      publish one file as the next version of its company
+    Run with the app stopped; while it runs, use POST /admin/policies instead."""
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
     s = get_settings()
-    started = time.perf_counter()
-    counts = ingest_all(open_store(s.data_dir), s.policies_dir)
-    print(f"\nIngested {sum(counts.values())} chunks in {time.perf_counter() - started:.1f}s "
-          f"into {s.data_dir}/chunks + {s.data_dir}/chroma")
+    store = open_store(s.data_dir)
+    if len(sys.argv) > 1:
+        path = Path(sys.argv[1])
+        res = publish_policy(store, path.read_text(encoding="utf-8"), source=path.name,
+                             old_version_grace_s=0)
+        print(f"{res.company_id}: v{res.previous_version} -> v{res.version} ({res.chunks} chunks)")
+        return
+    counts = ingest_all(store, s.policies_dir)
     for company, n in counts.items():
-        print(f"  policy__{company:<6} {n:>3} chunks")
+        print(f"  {company:<6} v{store.active_version(company)}  {n:>3} chunks")
 
 
 if __name__ == "__main__":

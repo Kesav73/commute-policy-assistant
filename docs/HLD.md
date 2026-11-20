@@ -140,9 +140,21 @@ Authorization: Bearer eyJ...
 
 ### 4.3 `GET /health`
 ```json
-200 {"status": "ok", "llm_provider": "groq", "chunks_loaded": {"acme": 27, "bolt": 25, "crest": 19}}
+200 {"status": "ok", "llm_provider": "groq", "chunks_loaded": {"acme": 27, "bolt": 25, "crest": 18},
+     "policy_versions": {"acme": 2, "bolt": 1, "crest": 1}}
 ```
-Lets the reviewer see at a glance that the service is up, which LLM mode it's in (`fake` = offline), and that seeding worked.
+Lets the reviewer see at a glance that the service is up, which LLM mode it's in (`fake` = offline), that seeding worked, and which policy version is live per company.
+
+### 4.4 `POST /admin/policies` — publish a new policy version (R2, R3)
+```
+Authorization: Bearer <admin token, e.g. A-ACME-ADM>
+{"markdown": "---\ncompany_id: acme\n..."}          same format as policies/*.md
+200 {"company_id": "acme", "version": 2, "previous_version": 1, "chunks": 27, "quarantined": [], "effective_date": "2026-07-01"}
+400 invalid_policy   parse/validation error ("... Nothing was changed.")
+403 forbidden        not an admin, or the file is for another company than the admin's token
+503 publish_failed   building the new version failed; the previous version is still active
+```
+Works on the **running** service: no rebuild, no restart. `/ask` responses carry `policy_version`.
 
 ---
 
@@ -178,11 +190,14 @@ Content and vectors are stored **separately**, joined by the chunk id:
 
 **Why separate?** The embedding model can be swapped, or several compared, without touching the content; the content can be inspected as a plain file; and the post-retrieval company check reads the chunk store, which the vector index cannot influence. Cost: one in-memory dictionary lookup per retrieved id, and a check at ingest that both stores hold exactly the same ids.
 
-### 5.3 Collections: one per company
+### 5.3 Collections: one per company and version, plus the active pointer
 ```
-policy__acme      policy__bolt      policy__crest
+data/active.json                      {"acme": {"version": 2, ...}, "bolt": {"version": 1, ...}, ...}
+data/chroma/  policy__acme__v2        policy__bolt__v1       policy__crest__v1
+data/chunks/  acme/v2.jsonl           bolt/v1.jsonl          crest/v1.jsonl
+data/policies/acme/v2.md              (the uploaded source, kept for audit and rebuilds)
 ```
-The collection name is built in code from the token's `company_id`: `f"policy__{company_id}"`.
+The collection name is built in code from the token's `company_id` and the **active** version from `active.json`: `f"policy__{company_id}__v{version}"`. Anything not named in `active.json` is never served.
 
 **Why not one big collection with a `where company_id = …` filter?** That also works, but isolation would depend on remembering the filter on every query. With a collection per company, the retriever *opens only the caller's collection*: there is no query that can reach another company's vectors, even with a bug in the filter.
 
@@ -211,17 +226,23 @@ The collection name is built in code from the token's `company_id`: `f"policy__{
 10. Respond        + request_id; log latency breakdown and llm_calls
 ```
 
-### 6.2 Ingest
+### 6.2 Publish a policy version (R2, R3) — `app/versioning.py`
 ```
- For each policies/*.md:
- 1. Parse     front matter (company_id, doc_id, title) + ### sub-sections      [invalid → stop, clear error]
- 2. Validate  company exists in directory; ≥ 1 chunk; chunk ids unique
- 3. Embed     each chunk's text with the local model
- 4. Store     chunk store: data/chunks/<company_id>.jsonl (atomic replace)
-              vector index: rebuild collection policy__<company_id> with ids + vectors only
- 5. Verify    the collection's ids == the chunk store's ids
+ 1. Parse + validate   front matter, sections, company in directory, = admin's company   [bad → 400, NOTHING touched]
+ 2. Quarantine         instruction-like sections are not indexed (guardrail)
+ 3. Build BESIDE       under the company's lock: embed → data/chunks/<co>/v<n+1>.jsonl (atomic)
+                       → collection policy__<co>__v<n+1>       (v<n> keeps answering meanwhile)
+ 4. Verify             same ids in both stores, expected count, current embedding, a search works
+ 5. Keep source        data/policies/<co>/v<n+1>.md
+ 6. FLIP               active.json → v<n+1>   (temp file + os.replace: atomic)
+ 7. Retire old         v<n> deleted after 10 s (a request pinned to it just before the flip can finish)
+ Failure in 3-5 → partial v<n+1> deleted, active.json untouched → v<n> still fully active.
 ```
-Runs automatically at startup and is idempotent, so restarting the container doesn't duplicate anything. This is what makes `docker compose up` alone produce a working, populated service. It can also be run by hand: `python -m app.ingest`.
+**One version per request:** `ask()` reads the active version once at the start and passes it to every step (retrieval, rewrite outline, citations), so a flip mid-request can't mix two versions.
+
+**Startup (`bootstrap`):** companies with no version are seeded from `policies/<co>.md` as v1; existing versions are kept, so a restart never rolls back an update. Anything not in `active.json` (a build that crashed before its flip, an interrupted deletion, pre-versioning collections) is deleted. An active version that's missing or built with another embedding model is rebuilt from its kept source. Then a warm-up retrieval per company loads the embedding model before the first request.
+
+**Reset to the seed policies:** `docker compose down -v` (deletes the data volume).
 
 ---
 
@@ -426,4 +447,4 @@ Dockerfile  docker-compose.yml  requirements.txt  pytest.ini  .env.example  READ
 | 8 | Hybrid retrieval, before/after | B1–B3 |
 | 9 | Docker, CI, README, EVALUATION.md, video | D1–D6 |
 
-Policy updates and versioning (R2, R3, A3) are **out of scope for now**: each company has one fixed policy.
+Policy updates and versioning (R2, R3, A3) are implemented: see §4.4, §5.3, §6.2 and journey entry 16.

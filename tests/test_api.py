@@ -46,7 +46,8 @@ def test_answer_shape_and_citation(client, acme):
     r = client.post("/ask", json=Q, headers=acme)
     assert r.status_code == 200
     body = r.json()
-    assert set(body) == {"status", "answer", "citations", "request_id"}
+    assert set(body) == {"status", "answer", "citations", "request_id", "policy_version"}
+    assert body["policy_version"] == 1
     assert body["status"] == "answered"
     assert body["citations"][0] == {
         "doc_id": "acme-transport-policy", "title": "Acme Corp Employee Transport Policy",

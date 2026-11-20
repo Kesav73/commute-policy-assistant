@@ -49,6 +49,7 @@ class AskResult:
     reason: str = ""                  # internal: why this outcome (logs / eval notes)
     retrieved: list[dict] = field(default_factory=list)
     timings_ms: dict = field(default_factory=dict)
+    policy_version: int | None = None  # the ONE version this whole request used
 
 
 def ask(store: PolicyStore, llm: LLM, company_id: str, question: str,
@@ -58,22 +59,27 @@ def ask(store: PolicyStore, llm: LLM, company_id: str, question: str,
     t_start = time.perf_counter()
     deadline = t_start + s.answer_deadline_s
     question = " ".join(question.split())  # collapse whitespace / newlines
+    version: int | None = None   # pinned below, inside the guarded retrieval step
 
     def done(status: str, answer: str, citations: list[Citation], reason: str,
              calls: int = 0, models: list[str] | None = None) -> AskResult:
         timings["total"] = round((time.perf_counter() - t_start) * 1000, 1)
-        log.info("ask rid=%s company=%s status=%s calls=%d models=%s reason=%s ms=%s",
-                 rid, company_id, status, calls, models or [], reason, timings)
+        log.info("ask rid=%s company=%s v=%s status=%s calls=%d models=%s reason=%s ms=%s",
+                 rid, company_id, version, status, calls, models or [], reason, timings)
         return AskResult(status, answer, citations, rid, calls, models or [], reason,
-                         retrieved, timings)
+                         retrieved, timings, version)
 
     # 1-2. Retrieval + evidence gate --------------------------------------------
     timings: dict = {}
     retrieved: list[dict] = []
     try:
+        # Pin the company's ACTIVE policy version once. Every step below (retrieval,
+        # rewrite outline, citations) uses this version, so a switch to a new version
+        # in the middle of this request can't mix two versions (PS.md R2).
+        version = store.active_version(company_id)
         # Hard cap: a stuck embedding or vector search can't hold the request (R10).
         r = run_with_timeout(retrieve, min(s.retrieval_timeout_s, deadline - time.perf_counter()),
-                             store, company_id, question)
+                             store, company_id, question, version=version)
     except StageTimeout as e:
         log.warning("retrieval timed out rid=%s: %s", rid, e)
         return done("unavailable", messages.TRY_AGAIN, [], "retrieval timeout")
@@ -95,7 +101,7 @@ def ask(store: PolicyStore, llm: LLM, company_id: str, question: str,
         if budget >= 0.3:
             models_used.append(f"{s.llm_model} (rewrite)")
             t0 = time.perf_counter()
-            rw = rewrite_query(llm, store, company_id, question, s.llm_model, budget)
+            rw = rewrite_query(llm, store, company_id, question, s.llm_model, budget, version)
             timings["rewrite"] = round((time.perf_counter() - t0) * 1000, 1)
             if rw.ok and rw.verdict != "ok" and not rw.queries:
                 # Guardrail (input): an attack / other-company request with no real
@@ -113,7 +119,7 @@ def ask(store: PolicyStore, llm: LLM, company_id: str, question: str,
                                 deadline - time.perf_counter() - MIN_TIME_FOR_CALL_S)
                     r = run_with_timeout(retrieve, limit, store, company_id, question,
                                          rewrites=rw.queries, include_original=False,
-                                         fusion="round_robin")
+                                         fusion="round_robin", version=version)
                     timings["retrieve_rewritten"] = r.timings_ms.get("multi_query")
                     retrieved = [{"section": c.section, "distance": round(c.distance, 3)}
                                  for c in r.chunks]

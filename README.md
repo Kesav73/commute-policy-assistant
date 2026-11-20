@@ -38,12 +38,20 @@ python3.12 -m venv .venv && .venv/bin/pip install -r requirements.txt
 ```
 </details>
 
+## Update a policy (no restart)
+1. `POST /auth/token` with `{"employee_id": "A-ACME-ADM"}` (an Acme admin).
+2. `POST /admin/policies` with `{"markdown": "<contents of sample_data/policy_updates/acme_v2.md>"}`. It moves the women's escort from 8 PM to 9 PM → `{"version": 2, "previous_version": 1}`.
+3. Ask an Acme question again: the answer and `policy_version` come from v2 immediately. A broken file (`sample_data/policy_updates/acme_broken.md`) is rejected with 400 and v2 stays live.
+
+Policy versions live in the `app-data` volume and survive restarts. `docker compose down -v` resets to the seed policies in `policies/`.
+
 ## API
 | Endpoint | Purpose |
 |---|---|
 | `POST /auth/token` | Mock identity provider: `{"employee_id": "E-ACME-001"}` → JWT |
 | `POST /ask` | `{"question": "..."}` with `Authorization: Bearer <token>` → answer + citations |
-| `GET /health` | Status, LLM mode, chunks loaded per company |
+| `GET /health` | Status, LLM mode, chunks loaded and live policy version per company |
+| `POST /admin/policies` | Admin token (e.g. `A-ACME-ADM`) + `{"markdown": "..."}` → publishes a new version of the admin's company policy on the running service |
 
 ## Docs
 - [Problem statement and requirement checklist](docs/PS.md)

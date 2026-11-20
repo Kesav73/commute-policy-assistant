@@ -57,6 +57,7 @@ class Policy:
     title: str
     source: str
     chunks: list[Chunk]
+    effective_date: str = ""   # from front matter, kept with the version (optional)
 
 
 # ------------------------------------------------------------ front matter --
@@ -165,7 +166,8 @@ def parse_policy(raw: str, source: str = "<policy>") -> Policy:
     if not chunks:
         raise PolicyParseError(f"{source}: no sections found")
 
-    return Policy(company_id=company_id, doc_id=doc_id, title=title, source=source, chunks=chunks)
+    return Policy(company_id=company_id, doc_id=doc_id, title=title, source=source, chunks=chunks,
+                  effective_date=str(fields.get("effective_date", "")))
 
 
 def parse_policy_file(path: Path) -> Policy:
