@@ -12,6 +12,7 @@ from pathlib import Path
 
 from app.auth import known_companies
 from app.config import get_settings
+from app.guardrails import is_instruction_like
 from app.policy_parser import Policy, PolicyParseError, parse_policy_file
 from app.store import PolicyStore, index_company, open_store
 
@@ -55,7 +56,16 @@ def ingest_all(store: PolicyStore, policies_dir: Path) -> dict[str, int]:
     counts = {}
     for p in policies:
         started = time.perf_counter()
-        counts[p.company_id] = index_company(store, p.company_id, p.chunks)
+        # Guardrail (chunks): a section that gives orders to an AI is never indexed,
+        # so it can't be retrieved, shown to the model or cited, whatever is asked.
+        kept = []
+        for c in p.chunks:
+            if is_instruction_like(c.text):
+                log.warning("quarantined %s (%s): instruction-like text, not indexed",
+                            c.id, c.section_title)
+            else:
+                kept.append(c)
+        counts[p.company_id] = index_company(store, p.company_id, kept)
         log.info("ingested %s: %d chunks from %s in %.2fs",
                  p.company_id, counts[p.company_id], p.source, time.perf_counter() - started)
     return counts

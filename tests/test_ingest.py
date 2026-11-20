@@ -25,8 +25,8 @@ def policies_copy(tmp_path) -> Path:
 
 
 def test_ingest_creates_one_collection_per_company(store):
-    assert ingest_all(store, POLICIES) == {"acme": 27, "bolt": 25, "crest": 19}
-    assert chunk_counts(store) == {"acme": 27, "bolt": 25, "crest": 19}
+    assert ingest_all(store, POLICIES) == {"acme": 27, "bolt": 25, "crest": 18}
+    assert chunk_counts(store) == {"acme": 27, "bolt": 25, "crest": 18}
 
 
 def test_each_company_holds_only_its_own_chunks(store):
@@ -59,7 +59,7 @@ def test_chunk_store_holds_content_and_citation_metadata(store, tmp_path):
 
 def test_ingest_twice_does_not_duplicate(store):
     ingest_all(store, POLICIES)
-    assert ingest_all(store, POLICIES) == {"acme": 27, "bolt": 25, "crest": 19}
+    assert ingest_all(store, POLICIES) == {"acme": 27, "bolt": 25, "crest": 18}
 
 
 def test_removed_section_disappears_after_reingest(store, policies_copy):
@@ -77,7 +77,7 @@ def test_bad_file_stops_ingest_before_anything_is_written(store, policies_copy):
     (policies_copy / "bolt.md").write_text("no front matter here")
     with pytest.raises(IngestError, match="bolt.md"):
         ingest_all(store, policies_copy)
-    assert chunk_counts(store) == {"acme": 27, "bolt": 25, "crest": 19}  # untouched
+    assert chunk_counts(store) == {"acme": 27, "bolt": 25, "crest": 18}  # untouched
 
 
 def test_unknown_company_is_rejected(policies_copy, store):

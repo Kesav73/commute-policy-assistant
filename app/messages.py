@@ -17,3 +17,8 @@ TRY_AGAIN = (
 INTERNAL_ERROR = "Something went wrong on our side. Please try again in a moment."
 
 QUESTION_LENGTH = "Please enter a question between {min} and {max} characters."
+
+# A guardrail stopped the request (an attempt to change the assistant's rules, or a
+# request for another company's policy). Plain, neutral, points to the right place.
+GUARDRAIL = ("I can only answer questions about your own company's transport policy. "
+             "For anything else, please contact your transport desk.")

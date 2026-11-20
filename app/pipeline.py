@@ -23,7 +23,9 @@ from dataclasses import dataclass, field
 
 from app import messages
 from app.answerer import SYSTEM_PROMPT, Citation, InvalidOutput, build_user_prompt, parse_answer
+from app.auth import known_companies
 from app.config import Settings, get_settings
+from app.guardrails import echoed_injection, mentions_other_company, other_company_terms
 from app.llm import LLM, LLMError, build_llm
 from app.retriever import retrieve
 from app.rewriter import rewrite_query
@@ -89,6 +91,15 @@ def ask(store: PolicyStore, llm: LLM, company_id: str, question: str,
             t0 = time.perf_counter()
             rw = rewrite_query(llm, store, company_id, question, s.llm_model, budget)
             timings["rewrite"] = round((time.perf_counter() - t0) * 1000, 1)
+            if rw.ok and rw.verdict != "ok" and not rw.queries:
+                # Guardrail (input): an attack / other-company request with no real
+                # transport question in it. Stop here: 1 call used, no answer call.
+                timings["rewrite_verdict"] = rw.verdict
+                return done("not_covered", messages.GUARDRAIL if rw.verdict != "off_topic"
+                            else messages.NOT_COVERED, [], f"guardrail: input {rw.verdict}",
+                            len(models_used), models_used)
+            if rw.ok and rw.verdict != "ok":
+                failures.append(f"input flagged {rw.verdict}; answering the transport part only")
             if rw.ok and rw.queries:
                 try:
                     r = retrieve(store, company_id, question, rewrites=rw.queries,
@@ -126,9 +137,25 @@ def ask(store: PolicyStore, llm: LLM, company_id: str, question: str,
             continue
         timings[f"llm_{len(models_used)}"] = round((time.perf_counter() - t0) * 1000, 1)
 
+        if result.status == "blocked":
+            return done("not_covered", messages.GUARDRAIL, [],
+                        "; ".join(failures + ["guardrail: answer call refused"]),
+                        len(models_used), models_used)
         if result.status == "answered":
-            return done("answered", result.text, result.citations,
-                        "; ".join(failures) or "ok", len(models_used), models_used)
+            # Guardrail (output), code backstop: the model can be talked into things,
+            # so these checks have the final word. On a hit: plain "not covered".
+            hit = echoed_injection(result.text)
+            if hit:
+                reason = f"guardrail: output repeats injected text {hit!r}"
+            elif other := mentions_other_company(
+                    result.text, other_company_terms(store, company_id, known_companies())):
+                reason = f"guardrail: output names another company {other!r}"
+            else:
+                return done("answered", result.text, result.citations,
+                            "; ".join(failures) or "ok", len(models_used), models_used)
+            log.warning("output guardrail rid=%s: %s", rid, reason)
+            return done("not_covered", messages.NOT_COVERED, [], "; ".join(failures + [reason]),
+                        len(models_used), models_used)
         reason = result.downgraded or "model said not covered"
         return done("not_covered", messages.NOT_COVERED, [],
                     "; ".join(failures + [reason]), len(models_used), models_used)
