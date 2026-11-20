@@ -217,3 +217,13 @@ def test_app_startup_warms_up_before_serving(monkeypatch, tmp_path):
     with TestClient(main_module.app):          # runs the lifespan (startup)
         pass
     assert len(called) == 1
+
+
+def test_startup_removes_pre_versioning_layout(tmp_path):
+    s = open_store(tmp_path / "data")
+    s.vectors.create_collection("policy__acme", embedding_function=None)      # old layout
+    (tmp_path / "data" / "chunks" / "acme.jsonl").write_text("{}\n")
+    bootstrap(s, POLICIES)
+    assert "policy__acme" not in [c.name for c in s.vectors.list_collections()]
+    assert not (tmp_path / "data" / "chunks" / "acme.jsonl").exists()
+    assert s.active_version("acme") == 1

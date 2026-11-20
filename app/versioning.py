@@ -153,6 +153,9 @@ def bootstrap(store: PolicyStore, policies_dir: Path) -> dict[str, int]:
     for name in legacy_collections(store):
         log.warning("removing pre-versioning collection %s", name)
         store.vectors.delete_collection(name)
+    for f in store.chunks.root.glob("*.jsonl"):          # pre-versioning chunk files
+        log.warning("removing pre-versioning chunk file %s", f.name)
+        f.unlink(missing_ok=True)
     companies = set(store.chunks.companies_on_disk()) | set(vector_versions(store))
     for co in sorted(companies):
         active = store.active_version(co)
