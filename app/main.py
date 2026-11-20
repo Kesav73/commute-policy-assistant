@@ -220,7 +220,7 @@ async def ask_endpoint(body: AskRequest, request: Request,
     thread can't be cancelled, and waiting for it is exactly the hang we avoid.
     """
     # Repeated question for the SAME company and the SAME live policy version?
-    # Answer from the cache: 0 LLM calls, a few ms (journey 19).
+    # Answer from the cache: 0 LLM calls, a few ms (EVALUATION.md).
     store, cache = request.app.state.store, getattr(request.app.state, "answer_cache", None)
     if cache is not None:
         try:

@@ -21,3 +21,6 @@ TODO.md
 
 # Eval LLM response cache (local, regenerable)
 eval/results/llm_cache.jsonl
+
+# Engineering journey: private tracking notes (not part of the submission)
+docs/journey/

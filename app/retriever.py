@@ -216,7 +216,7 @@ def warm_up(store: PolicyStore) -> dict[str, float]:
 RRF_K = 60  # standard constant from the RRF paper (Cormack et al., 2009)
 # Vectors get twice the vote of keywords: alone, vectors are the stronger ranker
 # (recall@3 0.89 vs 0.84 for stemmed BM25), so keywords should mainly add what
-# vectors miss rather than overrule them. Measured in docs/journey/09.
+# vectors miss rather than overrule them. Measured in EVALUATION.md.
 VECTOR_WEIGHT = 2.0
 KEYWORD_WEIGHT = 1.0
 STEM = True  # "booking"/"booked"/"book" match each other (BM25 alone: 51 -> 59 of 75)

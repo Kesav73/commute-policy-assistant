@@ -12,9 +12,9 @@ that was talked into something can't also be the only judge of it.
             mentions_other_company()   for Acme must never contain "Bolt" or "Crest"
 
 Deliberately NOT here: matching every number/time in the answer against the
-excerpts. Measured (docs/journey/12): facts were right in 63/66 answers with full
+excerpts. Measured (EVALUATION.md): facts were right in 63/66 answers with full
 retrieval and none were invented, so a strict matcher would mostly add false
-blocks ("8 PM" vs "8:00 PM"). See docs/journey/14.
+blocks ("8 PM" vs "8:00 PM"). See EVALUATION.md.
 """
 import re
 

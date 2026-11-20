@@ -1,7 +1,7 @@
 """The ask flow: question -> (rewrite) -> retrieve -> gate -> answer -> checked answer.
 
     1. pin the caller's company's ACTIVE policy version for the whole request
-    With QUERY_REWRITE=on (default, docs/journey/13 and 18):
+    With QUERY_REWRITE=on (default, EVALUATION.md):
     2. call 1: rewrite the question into 1-3 search queries (policy outline as context)
        and judge it (input guard). A pure attack / off-topic question stops here.
        If the rewrite fails, the original question is searched instead.
@@ -10,7 +10,7 @@
     5. call 2: answer. No fallback model is left: if it fails -> "try again".
     With QUERY_REWRITE=off: retrieve the original question, gate, then call 1 answers
     and call 2 is the fallback model.
-    Never a 3rd call (PS.md C2). Every stage has a hard time limit (journey 15).
+    Never a 3rd call (PS.md C2). Every stage has a hard time limit (EVALUATION.md).
 
 Try it:  python -m app.pipeline acme "Can I book a cab on Saturday?"
 """

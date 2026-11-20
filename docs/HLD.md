@@ -72,9 +72,9 @@ An HTTP service where an employee, identified by a JWT, asks a question about co
 | API | **FastAPI** | Required; typed request models; dependency injection for auth | — |
 | Auth | **PyJWT**, HS256 | Small, standard; we are our own issuer so a shared secret is enough | RS256 (better when issuer ≠ verifier; overkill here) |
 | Vector store | **Chroma, embedded** (`PersistentClient`) | Required; embedded = no extra container → fewer things to break in `docker compose up` | Chroma server container (more realistic, more moving parts) |
-| Embeddings | **nomic-embed-text-v1.5 (ONNX via fastembed), with `search_query:` / `search_document:` prefixes** | Chosen by benchmark (journey 07): recall@1 0.64 / recall@3 0.89 vs MiniLM's 0.55 / 0.82, ~35 ms per query; free, local, no PyTorch; baked into the image, runs offline | all-MiniLM-L6-v2 (former default: faster, smaller, less accurate), bge-large (ties, 2–3× cost), hosted embedding APIs (network call, quota, latency) |
+| Embeddings | **nomic-embed-text-v1.5 (ONNX via fastembed), with `search_query:` / `search_document:` prefixes** | Chosen by benchmark (EVALUATION.md): recall@1 0.64 / recall@3 0.89 vs MiniLM's 0.55 / 0.82, ~35 ms per query; free, local, no PyTorch; baked into the image, runs offline | all-MiniLM-L6-v2 (former default: faster, smaller, less accurate), bge-large (ties, 2–3× cost), hosted embedding APIs (network call, quota, latency) |
 | LLM | **Groq: `qwen/qwen3.8-27b` primary, `openai/gpt-oss-120b` fallback**; **Fake** (tests/offline) | Benchmarked on Groq with real prompts: Qwen p95 0.4–0.7 s and resisted the planted injection; gpt-oss-120b p95 0.94 s, a separate model with its own rate limits; gpt-oss-20b once obeyed the injection. Groq = fastest free tier. One OpenAI-compatible client, swap by env var | Gemini free Flash (~20 req/day, too low), local Ollama (slow on CPU, hurts C1) |
-| Bonus retrieval | **Stemmed BM25 (own ~60 lines) + vector, weighted RRF 2:1** | Cheap (<0.5 ms), explainable, helps exact terms and multi-hop: recall@3 0.89 → 0.92 (journey 09) | Cross-encoder re-rank (measured, journey 10: best of 4 only ties hybrid at ~1 s/question), query rewrite (costs our 2nd LLM call) |
+| Bonus retrieval | **Stemmed BM25 (own ~60 lines) + vector, weighted RRF 2:1** | Cheap (<0.5 ms), explainable, helps exact terms and multi-hop: recall@3 0.89 → 0.92 (EVALUATION.md) | Cross-encoder re-rank (measured, EVALUATION.md: best of 4 only ties hybrid at ~1 s/question), query rewrite (costs our 2nd LLM call) |
 | Tests | **pytest + FakeLLM** | G2: no quota or network needed | — |
 | Packaging | **Docker Compose**, one service | D2: one command | — |
 | **Not used** | LangChain / LlamaIndex | The pipeline is ~6 steps; direct code is shorter and every line is explainable in the viva (G4, G7) | — |
@@ -160,7 +160,7 @@ Authorization: Bearer <admin token, e.g. A-ACME-ADM>
 Works on the **running** service: no rebuild, no restart. `/ask` responses carry `policy_version`.
 `changes` compares the new version with the live one section by section, so the admin can see the update did what they meant (one rule edited, not a wrong or truncated file).
 
-### 4.5 Answer cache (journey 19)
+### 4.5 Answer cache
 Employees ask the same questions every day. `/ask` keeps recent answers in memory, keyed by **(company, active policy version, normalised question)**; a repeat is answered in a few ms with **0 LLM calls** and `"cached": true`. The company in the key keeps isolation; the **version** in the key means that once v2 is live, no v1 answer can be returned, with no invalidation needed. Exact match only (after case, spacing and punctuation), never "similar" questions. Only answered / not-covered / guardrail outcomes are cached, never "try again". Bounded (`ANSWER_CACHE_SIZE`, default 1000, least recently used out; 0 disables) with a time-to-live (`ANSWER_CACHE_TTL_S`, 6 h). Lives at the endpoint, so tests and evals always exercise the full pipeline.
 
 ---
@@ -312,7 +312,7 @@ Why not a hard-coded default: that is a secret in git. Why not crash when missin
 `top_k = 3` at retrieval, so the model only ever sees S1–S3, and the validator truncates to 3. Both are enforced in code.
 
 ### 8.3 p95 < 3 s (C1): latency budget
-Every stage has a **hard wall-clock limit** (journey 15), so nothing can hang:
+Every stage has a **hard wall-clock limit** (EVALUATION.md), so nothing can hang:
 
 | Step | Typical | Hard limit → on hit |
 |---|---|---|
@@ -398,7 +398,7 @@ Judging is **deterministic string and section checks, not an LLM judge**. That m
 ---
 
 ## 12. Bonus: hybrid retrieval (B1–B3)
-**Implemented (journey 09).** `RETRIEVAL_MODE=hybrid` (default) or `vector`. Hybrid = stemmed BM25 (`app/bm25.py`) over the same company's chunks from the chunk store, plus vector ranking of all the company's chunks, fused with weighted Reciprocal Rank Fusion (vector 2 : keyword 1, k = 60), keeping the top 3. Every vector candidate is validated against the company's chunk store before fusion. The evidence gate still uses the best vector distance.
+**Implemented (EVALUATION.md).** `RETRIEVAL_MODE=hybrid` (default) or `vector`. Hybrid = stemmed BM25 (`app/bm25.py`) over the same company's chunks from the chunk store, plus vector ranking of all the company's chunks, fused with weighted Reciprocal Rank Fusion (vector 2 : keyword 1, k = 60), keeping the top 3. Every vector candidate is validated against the company's chunk store before fusion. The evidence gate still uses the best vector distance.
 
 Measured on the 75 answerable gold questions: recall@3 0.89 → 0.92, pass 64 → 66, multi-hop recall@3 0.76 → 0.82, recall@1 0.64 → 0.63; cost < 0.5 ms and ~85 lines. Without stemming, hybrid was worse than vectors alone (61/75).
 
@@ -438,7 +438,7 @@ Dockerfile  docker-compose.yml  requirements.txt  pytest.ini  .env.example  READ
 |---|---|---|
 | Sub-section = chunk | Exact, checkable citations (§4.1); one rule per chunk | Relies on structured docs; unstructured PDFs would need a fallback splitter |
 | Collection per company | Isolation by construction: a query can't reach another company | More collections; cross-company analytics would need a different design (not a requirement) |
-| Evidence-gate threshold before the LLM | Fast, cheap, honest "not covered" for clearly unrelated questions | **Measured (nomic):** real matches sit at 0.13–0.49 cosine distance (median 0.24), not-covered gold questions at 0.27–0.42, clearly off-topic ones at 0.45–0.56: the groups overlap. So the gate is **conservative (0.50)**: the tightest value that blocks none of the 75 answerable questions. It only cuts obvious nonsense; the LLM makes the final "not covered" call from the text. Re-tuned whenever the embedding model changes (journey 03, 08). |
+| Evidence-gate threshold before the LLM | Fast, cheap, honest "not covered" for clearly unrelated questions | **Measured (nomic):** real matches sit at 0.13–0.49 cosine distance (median 0.24), not-covered gold questions at 0.27–0.42, clearly off-topic ones at 0.45–0.56: the groups overlap. So the gate is **conservative (0.50)**: the tightest value that blocks none of the 75 answerable questions. It only cuts obvious nonsense; the LLM makes the final "not covered" call from the text. Re-tuned whenever the embedding model changes (EVALUATION.md). |
 | Embedded Chroma, local embeddings | One container, no network for retrieval, fast | Not horizontally scalable as-is |
 | Deterministic eval judging | Rerunnable, free, objective | Can under-credit good paraphrases |
 | Groq 8B model | Speed (C1), free | Weaker reasoning and injection resistance than large models; mitigated by isolation and validation |
@@ -460,4 +460,4 @@ Dockerfile  docker-compose.yml  requirements.txt  pytest.ini  .env.example  READ
 | 8 | Hybrid retrieval, before/after | B1–B3 |
 | 9 | Docker, CI, README, EVALUATION.md, video | D1–D6 |
 
-Policy updates and versioning (R2, R3, A3) are implemented: see §4.4, §5.3, §6.2 and journey entry 16.
+Policy updates and versioning (R2, R3, A3) are implemented: see §4.4, §5.3, §6.2.

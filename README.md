@@ -59,4 +59,3 @@ Policy versions live in the `app-data` volume and survive restarts. `docker comp
 - [Problem statement and requirement checklist](docs/PS.md)
 - [High-level design](docs/HLD.md)
 - [Policy ground truth](docs/POLICY_MATRIX.md)
-- [Engineering journey: every experiment and its results](docs/journey/README.md)

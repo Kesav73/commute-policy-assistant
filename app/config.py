@@ -98,12 +98,12 @@ def get_settings() -> Settings:
         # answer "not covered" without calling the LLM. Conservative on purpose: only
         # clearly unrelated questions are cut here; borderline ones go to the LLM.
         # 0.50 = the tightest value that blocks none of the 75 answerable gold questions
-        # with nomic-embed-text-v1.5 (worst real one: 0.489). See docs/journey/08.
+        # with nomic-embed-text-v1.5 (worst real one: 0.489). See EVALUATION.md.
         retrieval_max_distance=float(os.getenv("RETRIEVAL_MAX_DISTANCE", "0.50")),
         # hybrid (default) = embeddings + stemmed BM25 keywords, fused with weighted RRF;
-        # vector = embeddings only. See docs/journey/09.
+        # vector = embeddings only. See EVALUATION.md.
         retrieval_mode=_retrieval_mode(),
-        # on (default): call 1 rewrites the question (docs/journey/13), call 2 answers;
+        # on (default): call 1 rewrites the question (EVALUATION.md), call 2 answers;
         # off: call 1 answers, call 2 is the fallback model.
         query_rewrite=os.getenv("QUERY_REWRITE", "on").strip().lower() not in ("off", "0", "false", "no"),
         **_llm_settings(),

@@ -1,6 +1,6 @@
 """Embedding model: nomic-embed-text-v1.5 (ONNX on CPU via fastembed, 768 dims).
 
-Chosen by measurement (docs/journey/07-embedding-models.md): on the 90-question gold
+Chosen by measurement (EVALUATION.md): on the 90-question gold
 set it lifted recall@1 0.55 -> 0.64 and recall@3 0.82 -> 0.89 over all-MiniLM-L6-v2,
 for ~30 ms more per question. Same library and model files as the benchmark, so the
 app's vectors are exactly the measured ones.
