@@ -277,14 +277,20 @@ Why not a hard-coded default: that is a secret in git. Why not crash when missin
 `top_k = 3` at retrieval, so the model only ever sees S1–S3, and the validator truncates to 3. Both are enforced in code.
 
 ### 8.3 p95 < 3 s (C1): latency budget
-| Step | Budget |
-|---|---|
-| JWT verify + input guard | < 5 ms |
-| Embed question (local ONNX) | ~10–30 ms |
-| Chroma search (≤ 30 chunks per collection) | < 10 ms |
-| LLM call (Groq 8B, ~400 input tokens, ≤ 200 output) | ~300–1000 ms, **timeout 2.0 s** |
-| Validate + respond | < 5 ms |
-| **Overall deadline** | **2.8 s**: if the remaining time can't fit a repair call, return `503 try again` instead |
+Every stage has a **hard wall-clock limit** (journey 15), so nothing can hang:
+
+| Step | Typical | Hard limit → on hit |
+|---|---|---|
+| JWT verify + input checks | < 5 ms | — |
+| Retrieval, original question (embed + Chroma + BM25) | ~30–90 ms | `RETRIEVAL_TIMEOUT_S` 1.0 s → 503 "try again" |
+| LLM call 1: rewrite + input verdict | p50 0.43 s, p95 0.74 s | `REWRITE_TIMEOUT_S` 1.2 s (total time) → keep original chunks |
+| Retrieval with rewritten queries | ~60–90 ms | 1.0 s, and must leave 0.6 s for the answer → keep original chunks |
+| LLM call 2: answer | ~0.3–0.8 s | what's left of the 2.8 s deadline (≤ `LLM_TIMEOUT_S` 2.0 s, total time) → 503 "try again" |
+| Validate + guardrails + respond | < 5 ms | — |
+| **Overall pipeline deadline** | | **2.8 s** (`ANSWER_DEADLINE_S`): no call is started that can't plausibly finish |
+| **Whole request backstop** | | **3.0 s** (`REQUEST_TIMEOUT_S`): the endpoint stops waiting and answers 503 "try again", whatever is stuck |
+
+How: a blocking step runs in a worker thread and the caller stops *waiting* at the limit (`app/timeouts.py`). Threads can't be cancelled, and waiting for a cancellation is itself a hang, so the stuck worker is left to finish in the background.
 
 Measured by the eval runner (p50 and p95 per mode) and reported in the evaluation report.
 
@@ -299,7 +305,9 @@ Measured by the eval runner (p50 and p95 per mode) and reported in the evaluatio
 | LLM timeout or error / quota | "We couldn't get an answer right now. Please try again in a moment." | 503 | 1–2 |
 | LLM output malformed twice | Same "try again" | 503 | 2 |
 | LLM cites labels that don't exist | Not-covered message (never show an unsupported claim) | 200 `not_covered` | 1 |
-| Retrieval error or slow | "Try again" | 503 | 0 |
+| Retrieval error, slow (> 1.0 s) or hanging | "Try again" | 503 | 0 |
+| Rewritten-query retrieval slow or failing | Answer from the original question's chunks | 200 | 2 |
+| Anything stuck past 3.0 s | "Try again" (request backstop) | 503 | — |
 | Bad or expired token | "Please sign in again." | 401 | 0 |
 | Empty / too long question | "Please enter a question between 3 and 500 characters." | 422 | 0 |
 | Anything unexpected | "Something went wrong on our side. Please try again." (details only in server log) | 500 | — |

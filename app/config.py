@@ -47,6 +47,8 @@ class Settings:
     llm_timeout_s: float       # per call
     answer_deadline_s: float   # whole /ask budget, kept under the 3 s p95 target
     rewrite_timeout_s: float   # cap for the rewrite call, so the answer call keeps its time
+    retrieval_timeout_s: float # hard cap for one retrieval (embed + search); normal ~30-90 ms
+    request_timeout_s: float   # last-resort cap on a whole request (middleware backstop)
 
 
 def _load_or_create_secret(data_dir: Path) -> str:
@@ -141,4 +143,6 @@ def _llm_settings() -> dict:
         "llm_timeout_s": float(os.getenv("LLM_TIMEOUT_S", "2.0")),
         "answer_deadline_s": float(os.getenv("ANSWER_DEADLINE_S", "2.8")),
         "rewrite_timeout_s": float(os.getenv("REWRITE_TIMEOUT_S", "1.2")),
+        "retrieval_timeout_s": float(os.getenv("RETRIEVAL_TIMEOUT_S", "1.0")),
+        "request_timeout_s": float(os.getenv("REQUEST_TIMEOUT_S", "3.0")),
     }

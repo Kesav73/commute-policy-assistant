@@ -30,6 +30,7 @@ from app.llm import LLM, LLMError, build_llm
 from app.retriever import retrieve
 from app.rewriter import rewrite_query
 from app.store import PolicyStore
+from app.timeouts import StageTimeout, run_with_timeout
 
 log = logging.getLogger("policy_assistant")
 
@@ -70,7 +71,12 @@ def ask(store: PolicyStore, llm: LLM, company_id: str, question: str,
     timings: dict = {}
     retrieved: list[dict] = []
     try:
-        r = retrieve(store, company_id, question)
+        # Hard cap: a stuck embedding or vector search can't hold the request (R10).
+        r = run_with_timeout(retrieve, min(s.retrieval_timeout_s, deadline - time.perf_counter()),
+                             store, company_id, question)
+    except StageTimeout as e:
+        log.warning("retrieval timed out rid=%s: %s", rid, e)
+        return done("unavailable", messages.TRY_AGAIN, [], "retrieval timeout")
     except Exception:
         log.exception("retrieval failed rid=%s", rid)
         return done("unavailable", messages.TRY_AGAIN, [], "retrieval error")
@@ -102,11 +108,18 @@ def ask(store: PolicyStore, llm: LLM, company_id: str, question: str,
                 failures.append(f"input flagged {rw.verdict}; answering the transport part only")
             if rw.ok and rw.queries:
                 try:
-                    r = retrieve(store, company_id, question, rewrites=rw.queries,
-                                 include_original=False, fusion="round_robin")
+                    # Leave the answer call its minimum time; on timeout keep step-1 chunks.
+                    limit = min(s.retrieval_timeout_s,
+                                deadline - time.perf_counter() - MIN_TIME_FOR_CALL_S)
+                    r = run_with_timeout(retrieve, limit, store, company_id, question,
+                                         rewrites=rw.queries, include_original=False,
+                                         fusion="round_robin")
                     timings["retrieve_rewritten"] = r.timings_ms.get("multi_query")
                     retrieved = [{"section": c.section, "distance": round(c.distance, 3)}
                                  for c in r.chunks]
+                except StageTimeout:
+                    log.warning("rewritten retrieval timed out rid=%s; using original chunks", rid)
+                    failures.append("rewritten retrieval timeout")
                 except Exception:
                     log.exception("rewritten retrieval failed rid=%s; using original chunks", rid)
                     failures.append("rewritten retrieval error")

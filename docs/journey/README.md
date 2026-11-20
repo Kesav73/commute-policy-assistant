@@ -40,3 +40,4 @@ A running log of every experiment and improvement: what we tried, how we measure
 | 12 | 2026-11-20 | [End-to-end eval rebuilt](12-e2e-eval-rebuilt.md) | 79/90 pass (was 72), facts 65/75, citations 69/75, p95 0.73 s, 0 leaks; 7 of 11 failures are retrieval |
 | 13 | 2026-11-20 | [Query rewriting](13-query-rewriting.md) | LLM rewrite with policy outline + round-robin merge: recall@1 0.63 → 0.77, recall@3 0.92 → 0.98, 66 → 72/75, +0.54 s; RRF merge hurt multi-hop; not yet in /ask |
 | 14 | 2026-11-20 | [Guardrails](14-guardrails.md) | Input verdict in the rewrite call, `blocked` in the answer call, ingest quarantine (catches only Crest §7), other-company + echo checks; no extra LLM calls; number matching rejected |
+| 15 | 2026-11-20 | [Never a hang](15-no-hangs.md) | Hard limits on retrieval (1.0 s), each LLM call (total time), whole request (3.0 s backstop); forced-hang tests: 503 in 0.5 s |

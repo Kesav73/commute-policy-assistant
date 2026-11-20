@@ -8,7 +8,9 @@ Endpoints
 
 Every error has one shape: {"error": "<code>", "message": "<plain text for a human>"}.
 """
+import asyncio
 import logging
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI, HTTPException, Request
@@ -166,6 +168,11 @@ def me(principal: Principal = Depends(current_principal)) -> dict:
             "role": principal.role}
 
 
+# Own pool for /ask work (not the event loop's default one): a stuck request can't
+# hold up anything that waits on the default pool, such as loop shutdown.
+_ASK_POOL = ThreadPoolExecutor(max_workers=32, thread_name_prefix="ask")
+
+
 @app.post(
     "/ask",
     response_model=AskResponse,
@@ -173,15 +180,29 @@ def me(principal: Principal = Depends(current_principal)) -> dict:
                422: {"description": "Invalid question"},
                503: {"description": "Temporarily unavailable - try again"}},
 )
-def ask_endpoint(body: AskRequest, request: Request,
-                 principal: Principal = Depends(current_principal)):
+async def ask_endpoint(body: AskRequest, request: Request,
+                       principal: Principal = Depends(current_principal)):
     """Answer from the caller's own company policy, with citations.
 
-    company_id comes ONLY from the verified token (principal). Sync def on purpose:
-    FastAPI runs it in a worker thread, so the blocking LLM call doesn't stall the server.
+    company_id comes ONLY from the verified token (principal).
+
+    The pipeline is blocking (embedding, HTTP to the LLM), so it runs in a worker
+    thread. Every stage inside it has its own time limit; on top of that, this
+    endpoint stops WAITING after REQUEST_TIMEOUT_S and answers "try again" (R10:
+    never a hang). It doesn't wait for the worker to finish or be cancelled - a
+    thread can't be cancelled, and waiting for it is exactly the hang we avoid.
     """
-    result = ask(request.app.state.store, request.app.state.llm,
-                 principal.company_id, body.question)
+    limit = get_settings().request_timeout_s
+    loop = asyncio.get_running_loop()
+    work = loop.run_in_executor(_ASK_POOL, ask, request.app.state.store, request.app.state.llm,
+                                principal.company_id, body.question)
+    done, _ = await asyncio.wait({work}, timeout=limit)
+    if not done:
+        work.add_done_callback(lambda f: f.exception())   # collect it later, silently
+        log.error("request backstop fired: /ask exceeded %.1fs", limit)
+        return error(503, "temporarily_unavailable", messages.TRY_AGAIN,
+                     headers={"Retry-After": "5"})
+    result = work.result()
 
     if result.status == "unavailable":
         return error(503, "temporarily_unavailable", result.answer,

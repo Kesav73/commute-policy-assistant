@@ -15,6 +15,7 @@ from typing import Protocol
 import httpx
 
 from app.config import Settings
+from app.timeouts import StageTimeout, run_with_timeout
 
 BASE_URLS = {
     "groq": "https://api.groq.com/openai/v1",
@@ -91,9 +92,12 @@ class OpenAICompatLLM:
                 body.update(params)
 
         try:
-            resp = self._client.post("/chat/completions", json=body,
-                                     timeout=httpx.Timeout(timeout_s))
-        except httpx.TimeoutException as e:
+            # httpx.Timeout limits each phase (connect, each read...) separately, so a
+            # server trickling bytes could keep the call open far longer. The outer
+            # run_with_timeout caps the TOTAL wall time of the call.
+            resp = run_with_timeout(self._client.post, timeout_s, "/chat/completions",
+                                    json=body, timeout=httpx.Timeout(timeout_s))
+        except (httpx.TimeoutException, StageTimeout) as e:
             raise LLMTimeout(f"{model}: no response within {timeout_s:.1f}s") from e
         except httpx.HTTPError as e:
             raise LLMUnavailable(f"{model}: {type(e).__name__}") from e
