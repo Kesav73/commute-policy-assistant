@@ -12,9 +12,9 @@ Built for the MoveInSync AI Developer case study B.
 ```bash
 docker compose up
 ```
-Then open **http://localhost:8000/docs** (Swagger UI).
+Then open **http://localhost:18000/docs** (Swagger UI).
 
-> **"port is already allocated"?** Something else is using port 8000. Stop it, or pick another port: `APP_PORT=8010 docker compose up`, then open http://localhost:8010/docs.
+> **"port is already allocated"?** Something else is using port 18000. Stop it, or pick another port: `APP_PORT=18010 docker compose up`, then open http://localhost:18010/docs.
 
 - **No API key needed.** Without one, the service runs in **offline mode** with a deterministic fake LLM (`/health` shows `"llm_provider": "fake"`). Everything works except that answers are a canned first sentence of the top excerpt.
 - **Real answers:** `cp .env.example .env`, set `GROQ_API_KEY` (free at https://console.groq.com/keys), then `docker compose up` again.
@@ -25,7 +25,7 @@ Then open **http://localhost:8000/docs** (Swagger UI).
 
 ```bash
 python3.12 -m venv .venv && .venv/bin/pip install -r requirements.txt
-.venv/bin/uvicorn app.main:app            # http://localhost:8000/docs
+.venv/bin/uvicorn app.main:app --port 18000   # http://localhost:18000/docs
 ```
 </details>
 
@@ -60,7 +60,7 @@ python3.12 -m venv .venv && .venv/bin/pip install -r requirements.txt
 
 ## Try it
 
-In http://localhost:8000/docs:
+In http://localhost:18000/docs:
 1. `POST /auth/token` with `{"employee_id": "E-ACME-001"}` → copy `access_token`. Click **Authorize** and paste it.
 2. `POST /ask` with `{"question": "After what time do women get a security escort on drops?"}`.
 3. Get a token for `E-BOLT-001` and ask the same question. Same question, different company, a different rule, and no leak.
