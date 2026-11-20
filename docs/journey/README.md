@@ -38,3 +38,4 @@ A running log of every experiment and improvement: what we tried, how we measure
 | 10 | 2026-11-20 | [Re-ranking](10-reranking.md) | 4 cross-encoders × vector/hybrid × N=10/all: best ties hybrid (66/75) at ~1 s/question, 3 of 4 made it worse; not adopted |
 | 11 | 2026-11-20 | [Retrieval configuration locked](11-retrieval-config-locked.md) | Hybrid, no re-rank, LLM reads exactly the 3 chunks it may cite |
 | 12 | 2026-11-20 | [End-to-end eval rebuilt](12-e2e-eval-rebuilt.md) | 79/90 pass (was 72), facts 65/75, citations 69/75, p95 0.73 s, 0 leaks; 7 of 11 failures are retrieval |
+| 13 | 2026-11-20 | [Query rewriting](13-query-rewriting.md) | LLM rewrite with policy outline + round-robin merge: recall@1 0.63 → 0.77, recall@3 0.92 → 0.98, 66 → 72/75, +0.54 s; RRF merge hurt multi-hop; not yet in /ask |

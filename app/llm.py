@@ -147,6 +147,9 @@ class FakeLLM:
                 raise item
             return item
 
+        if "<outline>" in user:   # query-rewrite prompt: echo the question as the only query
+            q = user.split("<question>", 1)[-1].split("</question>", 1)[0].strip()
+            return json.dumps({"queries": [q]})
         excerpts = _EXCERPT_RE.findall(user)
         if not excerpts:
             return json.dumps({"status": "not_covered", "answer": "", "citations": []})

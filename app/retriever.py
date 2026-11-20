@@ -133,11 +133,18 @@ def retrieve(
     k: int = TOP_K,
     max_distance: float | None = None,
     mode: str | None = None,          # "vector" | "hybrid"; default from settings
+    rewrites: list[str] | None = None,  # search queries from the query rewriter
+    include_original: bool = True,      # also search with the original question
+    fusion: str = "rrf",                # how rankings of several queries are merged:
+                                        #   "rrf" (agreement) | "round_robin" (coverage)
 ) -> RetrievalResult:
     k = max(1, min(k, TOP_K))
     if max_distance is None:
         max_distance = get_settings().retrieval_max_distance
 
+    if rewrites:
+        return _retrieve_multi(store, company_id, question, rewrites, k, max_distance, mode,
+                               include_original, fusion)
     cand = rank_candidates(store, company_id, question, mode=mode, pool=k)
     if cand is None:
         return RetrievalResult(company_id, question, [], False, max_distance)
@@ -150,6 +157,37 @@ def retrieve(
         company_id=company_id, question=question, chunks=cand.chunks[:k],
         has_evidence=has_evidence, max_distance=max_distance,
         timings_ms=cand.timings_ms, best_distance=best,
+    )
+
+
+def _retrieve_multi(store, company_id, question, rewrites, k, max_distance, mode, include_original,
+                    fusion="rrf"):
+    """Search with the rewritten queries (and, if include_original, the original
+    question too); fuse all rankings with RRF and keep the top k.
+
+    Variant A (include_original=False): only the rewrites decide the chunks.
+    Variant B (include_original=True): the original is one more ranking, so a poor
+    rewrite can add candidates but can't drop what plain retrieval finds.
+    Either way the gate uses the ORIGINAL question's best distance: a rewrite must
+    not turn an off-topic question into "covered".
+    """
+    t0 = time.perf_counter()
+    original = rank_candidates(store, company_id, question, mode=mode, pool=None)
+    if original is None:
+        return RetrievalResult(company_id, question, [], False, max_distance)
+    ranked = [rank_candidates(store, company_id, q, mode=mode, pool=None) for q in rewrites]
+    if include_original:
+        ranked = [original, *ranked]
+    by_id = {c.id: c for cand in ranked for c in cand.chunks}
+    rankings = [[c.id for c in cand.chunks] for cand in ranked]
+    order = round_robin(rankings) if fusion == "round_robin" else rrf(rankings)
+    best = original.best_distance
+    return RetrievalResult(
+        company_id=company_id, question=question, chunks=[by_id[i] for i in order[:k]],
+        has_evidence=best is not None and best <= max_distance, max_distance=max_distance,
+        timings_ms={"multi_query": round((time.perf_counter() - t0) * 1000, 1),
+                    "queries": len(ranked)},
+        best_distance=best,
     )
 
 
@@ -176,6 +214,23 @@ def rrf(rankings: list[list[str]], weights: list[float] | None = None, k: int = 
         for rank, cid in enumerate(ranking, start=1):
             score[cid] = score.get(cid, 0.0) + w / (k + rank)
     return sorted(score, key=lambda i: -score[i])
+
+
+def round_robin(rankings: list[list[str]]) -> list[str]:
+    """Take the best not-yet-chosen id of ranking 1, then ranking 2, ... and repeat.
+
+    For DECOMPOSED queries each sub-query targets a different rule, so each one's
+    top hit deserves a slot (coverage). RRF instead rewards ids that several
+    rankings agree on, which crowds out a section only one sub-query finds.
+    """
+    out, seen, depth = [], set(), 0
+    while any(depth < len(r) for r in rankings):
+        for r in rankings:
+            if depth < len(r) and r[depth] not in seen:
+                seen.add(r[depth])
+                out.append(r[depth])
+        depth += 1
+    return out
 
 
 _BM25_CACHE: dict[str, tuple[int, BM25Index]] = {}
