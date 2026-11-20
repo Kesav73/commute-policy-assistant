@@ -178,14 +178,14 @@ Status is updated as we build.
 | R10 | "Try again" on slow retrieval / LLM failure | ✅ 503 + Retry-After; hard time limit on every stage + 3 s request backstop (EVALUATION.md) |
 | R11 | ≥10-question JSONL eval set | ✅ 90 questions `eval/questions.jsonl`; results `eval/results/e2e.jsonl` |
 | R12 | Retrieval + answer scoring | ✅ `eval.run_retrieval` (recall@1/@3, latency), `eval.run_e2e` (quality, safety, budgets, causes) |
-| R13 | README design + trade-offs | ☐ |
+| R13 | README design + trade-offs | ✅ README: architecture, design decisions, trade-offs |
 | C1 | p95 < 3 s measured | ✅ p95 1.25 s, final run (EVALUATION.md) |
 | C2 | ≤ 2 LLM calls / question | ✅ enforced + tested |
 | C3 | ≤ 3 cited chunks | ✅ top_k=3 + cap in validator |
-| C4 | README explains C2/C3 | ☐ |
+| C4 | README explains C2/C3 | ✅ README: "How we stay within 2 LLM calls and 3 cited chunks" |
 | B1–B3 | Retrieval improvement, before/after, cost | ✅ embeddings, hybrid, re-ranking (rejected), query rewriting (EVALUATION.md) |
 | G2 | Tests run on fake LLM | ✅ conftest forces `LLM_PROVIDER=fake` |
 | G5 | No keys committed | ✅ `.env` git-ignored; every commit scanned |
 | D1 | GitHub repo | ✅ github.com/Kesav73/commute-policy-assistant (private for now) |
 | D2 | One-command start | ✅ `docker compose up` (works with or without a key) |
-| D3–D6 | README, report, JSONL, video | 🟡 JSONL ✅ (`eval/results/e2e.jsonl`, `retrieval.jsonl`); README / report / video pending |
+| D3–D6 | README, report, JSONL, video | 🟡 README ✅, EVALUATION.md ✅, JSONL ✅ (`eval/results/e2e.jsonl`); video pending |
