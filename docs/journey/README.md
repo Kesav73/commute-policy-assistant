@@ -37,3 +37,4 @@ A running log of every experiment and improvement: what we tried, how we measure
 | 09 | 2026-11-20 | [Hybrid search](09-hybrid-search.md) | Stemmed BM25 + vectors (2:1 RRF): recall@3 0.89 → 0.92, 64 → 66, multi-hop 0.76 → 0.82, <0.5 ms; plain hybrid was worse |
 | 10 | 2026-11-20 | [Re-ranking](10-reranking.md) | 4 cross-encoders × vector/hybrid × N=10/all: best ties hybrid (66/75) at ~1 s/question, 3 of 4 made it worse; not adopted |
 | 11 | 2026-11-20 | [Retrieval configuration locked](11-retrieval-config-locked.md) | Hybrid, no re-rank, LLM reads exactly the 3 chunks it may cite |
+| 12 | 2026-11-20 | [End-to-end eval rebuilt](12-e2e-eval-rebuilt.md) | 79/90 pass (was 72), facts 65/75, citations 69/75, p95 0.73 s, 0 leaks; 7 of 11 failures are retrieval |
