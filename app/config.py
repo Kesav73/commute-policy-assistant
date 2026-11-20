@@ -49,6 +49,8 @@ class Settings:
     rewrite_timeout_s: float   # cap for the rewrite call, so the answer call keeps its time
     retrieval_timeout_s: float # hard cap for one retrieval (embed + search); normal ~30-90 ms
     request_timeout_s: float   # last-resort cap on a whole request (middleware backstop)
+    answer_cache_size: int     # repeated questions answered from memory; 0 disables
+    answer_cache_ttl_s: float  # safety net: cached answers expire after this
 
 
 def _load_or_create_secret(data_dir: Path) -> str:
@@ -145,4 +147,6 @@ def _llm_settings() -> dict:
         "rewrite_timeout_s": float(os.getenv("REWRITE_TIMEOUT_S", "1.2")),
         "retrieval_timeout_s": float(os.getenv("RETRIEVAL_TIMEOUT_S", "1.0")),
         "request_timeout_s": float(os.getenv("REQUEST_TIMEOUT_S", "3.0")),
+        "answer_cache_size": int(os.getenv("ANSWER_CACHE_SIZE", "1000")),
+        "answer_cache_ttl_s": float(os.getenv("ANSWER_CACHE_TTL_S", "21600")),
     }

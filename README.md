@@ -43,6 +43,8 @@ python3.12 -m venv .venv && .venv/bin/pip install -r requirements.txt
 2. `POST /admin/policies` with `{"markdown": "<contents of sample_data/policy_updates/acme_v2.md>"}`. It moves the women's escort from 8 PM to 9 PM → `{"version": 2, "previous_version": 1}`.
 3. Ask an Acme question again: the answer and `policy_version` come from v2 immediately. A broken file (`sample_data/policy_updates/acme_broken.md`) is rejected with 400 and v2 stays live.
 
+The response lists what changed (`"changed": ["4.1 …", "4.2 …"]`). Repeated questions are answered from a cache keyed by company and policy version (`"cached": true`, 0 LLM calls); after an update the old answers can't be served.
+
 Policy versions live in the `app-data` volume and survive restarts. `docker compose down -v` resets to the seed policies in `policies/`.
 
 ## API
@@ -51,7 +53,7 @@ Policy versions live in the `app-data` volume and survive restarts. `docker comp
 | `POST /auth/token` | Mock identity provider: `{"employee_id": "E-ACME-001"}` → JWT |
 | `POST /ask` | `{"question": "..."}` with `Authorization: Bearer <token>` → answer + citations |
 | `GET /health` | Status, LLM mode, chunks loaded and live policy version per company |
-| `POST /admin/policies` | Admin token (e.g. `A-ACME-ADM`) + `{"markdown": "..."}` → publishes a new version of the admin's company policy on the running service |
+| `POST /admin/policies` | Admin token (e.g. `A-ACME-ADM`) + `{"markdown": "..."}` → publishes a new version of the admin's company policy on the running service; reports which sections changed |
 
 ## Docs
 - [Problem statement and requirement checklist](docs/PS.md)

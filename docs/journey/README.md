@@ -44,3 +44,4 @@ A running log of every experiment and improvement: what we tried, how we measure
 | 16 | 2026-11-20 | [Policy versioning](16-policy-versioning.md) | Build beside → verify → atomic pointer flip; live update on a running container, failures/crashes keep the old version; found + fixed a cold-start bug |
 | 17 | 2026-11-20 | [Final end-to-end run](17-final-e2e-run.md) | Submission code: 83/90, facts 69/75, citations 71/75, 0 leaks, p95 1.25 s, ≤ 2 calls, ≤ 3 citations |
 | 18 | 2026-11-20 | [Simpler pipeline](18-simpler-pipeline.md) | Dropped the retrieval before the rewrite: rewrite → one retrieval → gate → answer; cached rerun: identical 83/90 |
+| 19 | 2026-11-20 | [Answer cache + change report](19-answer-cache-and-change-report.md) | Repeats answered in ~15 ms with 0 LLM calls, keyed by policy version (an update can't serve old answers); publish reports changed/added/removed sections |

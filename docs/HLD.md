@@ -149,12 +149,19 @@ Lets the reviewer see at a glance that the service is up, which LLM mode it's in
 ```
 Authorization: Bearer <admin token, e.g. A-ACME-ADM>
 {"markdown": "---\ncompany_id: acme\n..."}          same format as policies/*.md
-200 {"company_id": "acme", "version": 2, "previous_version": 1, "chunks": 27, "quarantined": [], "effective_date": "2026-07-01"}
+200 {"company_id": "acme", "version": 2, "previous_version": 1, "chunks": 27, "quarantined": [],
+     "effective_date": "2026-07-01",
+     "changes": {"changed": ["4.1 Night-Shift Safety > Escort Requirement", "4.2 Night-Shift Safety > Routing Rules"],
+                 "added": [], "removed": [], "unchanged": 25}}
 400 invalid_policy   parse/validation error ("... Nothing was changed.")
 403 forbidden        not an admin, or the file is for another company than the admin's token
 503 publish_failed   building the new version failed; the previous version is still active
 ```
 Works on the **running** service: no rebuild, no restart. `/ask` responses carry `policy_version`.
+`changes` compares the new version with the live one section by section, so the admin can see the update did what they meant (one rule edited, not a wrong or truncated file).
+
+### 4.5 Answer cache (journey 19)
+Employees ask the same questions every day. `/ask` keeps recent answers in memory, keyed by **(company, active policy version, normalised question)**; a repeat is answered in a few ms with **0 LLM calls** and `"cached": true`. The company in the key keeps isolation; the **version** in the key means that once v2 is live, no v1 answer can be returned, with no invalidation needed. Exact match only (after case, spacing and punctuation), never "similar" questions. Only answered / not-covered / guardrail outcomes are cached, never "try again". Bounded (`ANSWER_CACHE_SIZE`, default 1000, least recently used out; 0 disables) with a time-to-live (`ANSWER_CACHE_TTL_S`, 6 h). Lives at the endpoint, so tests and evals always exercise the full pipeline.
 
 ---
 

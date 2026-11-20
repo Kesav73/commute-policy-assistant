@@ -227,3 +227,35 @@ def test_startup_removes_pre_versioning_layout(tmp_path):
     assert "policy__acme" not in [c.name for c in s.vectors.list_collections()]
     assert not (tmp_path / "data" / "chunks" / "acme.jsonl").exists()
     assert s.active_version("acme") == 1
+
+
+# ----------------------------------------------------------- change report --
+
+def test_change_report_lists_exactly_what_changed(store):
+    res = publish_policy(store, ACME_V2, old_version_grace_s=0)
+    assert res.changes == {
+        "changed": ["4.1 Night-Shift Safety > Escort Requirement",
+                    "4.2 Night-Shift Safety > Routing Rules"],
+        "added": [], "removed": [], "unchanged": 25}
+
+
+def test_change_report_sees_added_and_removed_sections(store):
+    trimmed = ACME_V1.split("## 9. No-Show Penalty")[0]                       # drop section 9
+    extra = trimmed + "\n## 10. Parking\n\n### 10.1 Two-Wheelers\nTwo-wheeler parking is free.\n"
+    res = publish_policy(store, extra, old_version_grace_s=0)
+    assert res.changes["removed"] == ["9.1 No-Show Penalty > What Counts as a No-Show",
+                                      "9.2 No-Show Penalty > Penalty",
+                                      "9.3 No-Show Penalty > Repeat Suspensions and Appeals"]
+    assert res.changes["added"] == ["10.1 Parking > Two-Wheelers"] and res.changes["changed"] == []
+
+
+def test_first_version_reports_everything_as_added(tmp_path):
+    s = open_store(tmp_path / "data")
+    res = publish_policy(s, ACME_V1, old_version_grace_s=0)
+    assert len(res.changes["added"]) == 27 and res.changes["unchanged"] == 0
+
+
+def test_api_returns_the_change_report(api, token_for):
+    r = api.post("/admin/policies", json={"markdown": ACME_V2}, headers=bearer(token_for("A-ACME-ADM")))
+    assert r.json()["changes"]["changed"] == ["4.1 Night-Shift Safety > Escort Requirement",
+                                              "4.2 Night-Shift Safety > Routing Rules"]

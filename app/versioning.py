@@ -59,6 +59,30 @@ class PublishResult:
     quarantined: list[str] = field(default_factory=list)
     doc_id: str = ""
     effective_date: str = ""
+    changes: dict = field(default_factory=dict)   # what differs from the previous version
+
+
+def compare_versions(old: dict, new: list) -> dict:
+    """Section-by-section report of a new version against the live one.
+
+    old: {chunk id: Chunk} of the previous version ({} for a first version)
+    new: the new version's indexed chunks
+    -> {"changed": [...], "added": [...], "removed": [...], "unchanged": n}
+    Entries read "4.1 Night-Shift Safety > Escort Requirement". The admin can check
+    the update did what they meant (one rule edited vs. a wrong or truncated file).
+    """
+    before = {c.section: c for c in old.values()}
+    after = {c.section: c for c in new}
+    label = lambda c: f"{c.section} {c.section_title}"  # noqa: E731
+    order = lambda s: [int(x) for x in s.split(".")]    # noqa: E731
+    changed = [label(after[s]) for s in sorted(before.keys() & after.keys(), key=order)
+               if (before[s].section_title, before[s].body) != (after[s].section_title, after[s].body)]
+    return {
+        "changed": changed,
+        "added": [label(after[s]) for s in sorted(after.keys() - before.keys(), key=order)],
+        "removed": [label(before[s]) for s in sorted(before.keys() - after.keys(), key=order)],
+        "unchanged": len(before.keys() & after.keys()) - len(changed),
+    }
 
 
 def _lock(company_id: str) -> threading.Lock:
@@ -105,6 +129,7 @@ def publish_policy(store: PolicyStore, markdown: str, source: str = "upload",
         previous = store.active_version(co)
         on_disk = set(store.chunks.versions_on_disk(co)) | set(vector_versions(store).get(co, []))
         version = max([previous or 0, *on_disk]) + 1   # never reuse a number
+        changes = compare_versions(store.chunks.all(co, previous) if previous else {}, kept)
         started = time.perf_counter()
         try:
             n = build_version(store, co, version, kept)                       # 2-3
@@ -121,17 +146,20 @@ def publish_policy(store: PolicyStore, markdown: str, source: str = "upload",
             "version": version, "doc_id": policy.doc_id, "title": policy.title,
             "effective_date": policy.effective_date,
             "chunks": n, "quarantined": quarantined, "source": source,
+            "changes": {k: (len(x) if isinstance(x, list) else x) for k, x in changes.items()},
             "activated_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
         })
-        log.info("published %s v%d (%d chunks, %d quarantined) in %.2fs; previous v%s",
-                 co, version, n, len(quarantined), time.perf_counter() - started, previous)
+        log.info("published %s v%d (%d chunks, %d quarantined) in %.2fs; previous v%s; "
+                 "changed %s, added %s, removed %s", co, version, n, len(quarantined),
+                 time.perf_counter() - started, previous, changes["changed"], changes["added"],
+                 changes["removed"])
         if previous is not None:                                              # 6
             if old_version_grace_s > 0:
                 delete_later(store, co, previous, old_version_grace_s)
             else:
                 delete_version(store, co, previous)   # offline (CLI/tests): nothing in flight
     return PublishResult(co, version, previous, n, quarantined, policy.doc_id,
-                         policy.effective_date)
+                         policy.effective_date, changes)
 
 
 def _discard(store: PolicyStore, company_id: str, version: int) -> None:

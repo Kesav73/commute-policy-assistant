@@ -10,6 +10,7 @@ Every error has one shape: {"error": "<code>", "message": "<plain text for a hum
 """
 import asyncio
 import logging
+import uuid
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
 
@@ -19,6 +20,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app import messages
+from app.answer_cache import AnswerCache, CachedAnswer
 from app.auth import Principal, UnknownEmployeeError, current_principal, issue_token, require_admin
 from app.config import get_settings
 from app.llm import build_llm
@@ -47,6 +49,7 @@ async def lifespan(app: FastAPI):
     # Load the embedding model and indexes now, not inside the first question.
     log.info("warm-up (ms): %s", warm_up(app.state.store))
     app.state.llm = build_llm(s)
+    app.state.answer_cache = AnswerCache(s.answer_cache_size, s.answer_cache_ttl_s)
     log.info("ready: policy versions=%s chunks=%s llm=%s (%s, fallback %s)", versions,
              chunk_counts(app.state.store), s.llm_provider, s.llm_model, s.llm_fallback_model)
     yield
@@ -98,6 +101,7 @@ class AskResponse(BaseModel):
     citations: list[CitationOut]
     request_id: str
     policy_version: int | None = None   # the version of the company's policy that answered
+    cached: bool = False                # served from the answer cache (0 LLM calls)
 
 
 class PolicyUpload(StrictModel):
@@ -113,6 +117,7 @@ class PublishResponse(BaseModel):
     chunks: int
     quarantined: list[str]
     effective_date: str
+    changes: dict          # {"changed": [...], "added": [...], "removed": [...], "unchanged": n}
 
 
 # ----------------------------------------------------------------- errors --
@@ -214,6 +219,23 @@ async def ask_endpoint(body: AskRequest, request: Request,
     never a hang). It doesn't wait for the worker to finish or be cancelled - a
     thread can't be cancelled, and waiting for it is exactly the hang we avoid.
     """
+    # Repeated question for the SAME company and the SAME live policy version?
+    # Answer from the cache: 0 LLM calls, a few ms (journey 19).
+    store, cache = request.app.state.store, getattr(request.app.state, "answer_cache", None)
+    if cache is not None:
+        try:
+            hit = cache.get(principal.company_id, store.active_version(principal.company_id),
+                            body.question)
+        except Exception:   # noqa: BLE001 - a cache problem must never fail the request
+            hit = None
+        if hit is not None:
+            rid = uuid.uuid4().hex[:12]
+            log.info("ask rid=%s company=%s v=%s status=%s cached=true",
+                     rid, principal.company_id, hit.policy_version, hit.status)
+            return AskResponse(status=hit.status, answer=hit.answer,
+                               citations=[CitationOut(**c.__dict__) for c in hit.citations],
+                               request_id=rid, policy_version=hit.policy_version, cached=True)
+
     limit = get_settings().request_timeout_s
     loop = asyncio.get_running_loop()
     work = loop.run_in_executor(_ASK_POOL, ask, request.app.state.store, request.app.state.llm,
@@ -226,9 +248,13 @@ async def ask_endpoint(body: AskRequest, request: Request,
                      headers={"Retry-After": "5"})
     result = work.result()
 
-    if result.status == "unavailable":
+    if result.status == "unavailable":           # never cached: a temporary failure
         return error(503, "temporarily_unavailable", result.answer,
                      headers={"Retry-After": "5"}, request_id=result.request_id)
+    if cache is not None and result.policy_version is not None:
+        cache.put(principal.company_id, body.question,
+                  CachedAnswer(result.status, result.answer, tuple(result.citations),
+                               result.policy_version))
 
     return AskResponse(
         status=result.status,
@@ -266,6 +292,10 @@ def publish_endpoint(body: PolicyUpload, request: Request,
     except PublishFailed as e:
         return error(503, "publish_failed", str(e), headers={"Retry-After": "30"})
     log.info("admin %s published %s v%d", principal.employee_id, res.company_id, res.version)
+    cache = getattr(request.app.state, "answer_cache", None)
+    if cache is not None:   # free memory; correctness already comes from the version in the key
+        cache.drop_company(res.company_id)
     return PublishResponse(company_id=res.company_id, version=res.version,
                            previous_version=res.previous_version, chunks=res.chunks,
-                           quarantined=res.quarantined, effective_date=res.effective_date)
+                           quarantined=res.quarantined, effective_date=res.effective_date,
+                           changes=res.changes)
