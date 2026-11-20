@@ -36,3 +36,4 @@ A running log of every experiment and improvement: what we tried, how we measure
 | 08 | 2026-11-20 | [Switch the app to nomic](08-switch-to-nomic.md) | App now 0.64 / 0.89; gate re-tuned 0.75 → 0.50; image 1.9 GB, RAM ~1.28 GB |
 | 09 | 2026-11-20 | [Hybrid search](09-hybrid-search.md) | Stemmed BM25 + vectors (2:1 RRF): recall@3 0.89 → 0.92, 64 → 66, multi-hop 0.76 → 0.82, <0.5 ms; plain hybrid was worse |
 | 10 | 2026-11-20 | [Re-ranking](10-reranking.md) | 4 cross-encoders × vector/hybrid × N=10/all: best ties hybrid (66/75) at ~1 s/question, 3 of 4 made it worse; not adopted |
+| 11 | 2026-11-20 | [Retrieval configuration locked](11-retrieval-config-locked.md) | Hybrid, no re-rank, LLM reads exactly the 3 chunks it may cite |
