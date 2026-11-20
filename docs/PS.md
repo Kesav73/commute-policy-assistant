@@ -173,19 +173,19 @@ Status is updated as we build.
 | R5 | Server-side company filter, no override | ✅ collection from token; body field → 422; query/header ignored (tests) |
 | R6 | Document + section citations | ✅ `app/answerer.py` (labels → real sections, in code) |
 | R7 | "Not covered" | ✅ gate (0 calls) + model status + downgrade of unsupported answers |
-| R8 | Injection resistance | 🟡 isolation + prompt rules + citation checks; to be measured in eval |
+| R8 | Injection resistance | ✅ quarantine at ingest, input verdict, prompt rules, output checks; 0 injections obeyed (journey 14, 17) |
 | R9 | "Contact transport desk" message | ✅ `app/messages.py` |
-| R10 | "Try again" on slow retrieval / LLM failure | ✅ 503 + Retry-After; 500 handler without stack trace |
-| R11 | ≥10-question JSONL eval set | ☐ |
-| R12 | Retrieval + answer scoring | ☐ |
+| R10 | "Try again" on slow retrieval / LLM failure | ✅ 503 + Retry-After; hard time limit on every stage + 3 s request backstop (journey 15) |
+| R11 | ≥10-question JSONL eval set | ✅ 90 questions `eval/questions.jsonl`; results `eval/results/e2e.jsonl` |
+| R12 | Retrieval + answer scoring | ✅ `eval.run_retrieval` (recall@1/@3, latency), `eval.run_e2e` (quality, safety, budgets, causes) |
 | R13 | README design + trade-offs | ☐ |
-| C1 | p95 < 3 s measured | ☐ |
+| C1 | p95 < 3 s measured | ✅ p95 1.25 s, final run (journey 17) |
 | C2 | ≤ 2 LLM calls / question | ✅ enforced + tested |
 | C3 | ≤ 3 cited chunks | ✅ top_k=3 + cap in validator |
 | C4 | README explains C2/C3 | ☐ |
-| B1–B3 | Retrieval improvement, before/after, cost | ☐ |
+| B1–B3 | Retrieval improvement, before/after, cost | ✅ embeddings, hybrid, re-ranking (rejected), query rewriting (journey 07–13) |
 | G2 | Tests run on fake LLM | ✅ conftest forces `LLM_PROVIDER=fake` |
-| G5 | No keys committed | ☐ |
+| G5 | No keys committed | ✅ `.env` git-ignored; every commit scanned |
 | D1 | GitHub repo | ✅ github.com/Kesav73/commute-policy-assistant (private for now) |
 | D2 | One-command start | ✅ `docker compose up` (works with or without a key) |
-| D3–D6 | README, report, JSONL, video | 🟡 JSONL ✅ (`eval/results/retrieval.jsonl`); README / report / video pending |
+| D3–D6 | README, report, JSONL, video | 🟡 JSONL ✅ (`eval/results/e2e.jsonl`, `retrieval.jsonl`); README / report / video pending |

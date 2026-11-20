@@ -1,27 +1,27 @@
 {
-  "generated_at": "2026-11-20 19:29:42",
+  "generated_at": "2026-11-20 22:17:25",
   "llm_provider": "groq",
   "models": [
     "qwen/qwen3.8-27b",
     "openai/gpt-oss-120b"
   ],
   "retrieval_mode": "hybrid",
-  "run_seconds": 724,
+  "run_seconds": 1864,
   "quality": {
     "n": 90,
-    "pass": 79,
-    "status": 83,
+    "pass": 83,
+    "status": 85,
     "answerable": 75,
-    "facts": 65,
-    "citation": 69
+    "facts": 69,
+    "citation": 71
   },
   "quality_when_retrieval_complete": {
-    "n": 66,
-    "pass": 63,
-    "status": 64,
-    "answerable": 66,
-    "facts": 63,
-    "citation": 64
+    "n": 73,
+    "pass": 69,
+    "status": 70,
+    "answerable": 73,
+    "facts": 69,
+    "citation": 70
   },
   "safety": {
     "leaks": 0,
@@ -30,33 +30,35 @@
   },
   "budgets": {
     "latency_ms_all": {
-      "p50": 529.6,
-      "p95": 728.2,
-      "max": 1100.5
+      "p50": 817.2,
+      "p95": 1252.7,
+      "max": 1811.7
     },
     "latency_ms_with_llm": {
-      "p50": 529.6,
-      "p95": 728.2,
-      "max": 1100.5
+      "p50": 817.2,
+      "p95": 1252.7,
+      "max": 1811.7
     },
     "llm_calls": {
-      "1": 90
+      "1": 11,
+      "2": 79
     },
-    "max_llm_calls": 1,
-    "max_citations": 3
+    "max_llm_calls": 2,
+    "max_citations": 3,
+    "latency_measured_on": "90 live questions (0 from LLM cache)"
   },
   "failure_causes": {
     "unsafe": 0,
     "unavailable": 0,
-    "retrieval": 7,
-    "over_cautious": 2,
+    "retrieval": 2,
+    "over_cautious": 3,
     "confident_wrong": 1,
     "incomplete": 1,
     "citation": 0
   },
   "status_confusion": {
-    "answered->answered": 69,
-    "answered->not_covered": 6,
+    "answered->answered": 71,
+    "answered->not_covered": 4,
     "not_covered->answered": 1,
     "not_covered->not_covered": 14
   },
@@ -71,11 +73,11 @@
     },
     "paraphrase": {
       "n": 24,
-      "pass": 23,
-      "status": 23,
+      "pass": 24,
+      "status": 24,
       "answerable": 24,
-      "facts": 23,
-      "citation": 23
+      "facts": 24,
+      "citation": 24
     },
     "same_section": {
       "n": 10,
@@ -87,19 +89,19 @@
     },
     "multi_hop": {
       "n": 13,
-      "pass": 9,
+      "pass": 11,
       "status": 12,
       "answerable": 13,
-      "facts": 9,
+      "facts": 11,
       "citation": 12
     },
     "edge": {
       "n": 5,
-      "pass": 4,
-      "status": 4,
+      "pass": 5,
+      "status": 5,
       "answerable": 5,
-      "facts": 4,
-      "citation": 4
+      "facts": 5,
+      "citation": 5
     },
     "cross_company": {
       "n": 6,
@@ -129,11 +131,11 @@
   "by_company": {
     "acme": {
       "n": 30,
-      "pass": 26,
-      "status": 28,
+      "pass": 30,
+      "status": 30,
       "answerable": 25,
-      "facts": 21,
-      "citation": 23
+      "facts": 25,
+      "citation": 25
     },
     "bolt": {
       "n": 30,
@@ -153,6 +155,7 @@
     }
   },
   "models_used": {
-    "qwen/qwen3.8-27b": 90
+    "qwen/qwen3.8-27b (rewrite)": 90,
+    "qwen/qwen3.8-27b": 79
   }
 }

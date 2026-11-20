@@ -132,7 +132,10 @@ def score(case: dict, http_status: int, body: dict, res) -> dict:
     if case["required"] and not retrieval_complete:
         notes.append(f"retrieval missed {[s for s in case['required'] if s not in retrieved]}")
     if res is not None:
-        if res.llm_calls == 2:
+        if res.llm_calls == 2 and any(m.endswith("(rewrite)") for m in res.models):
+            if res.reason and res.reason != "ok":
+                notes.append(f"rewrite + answer ({res.reason})")
+        elif res.llm_calls == 2:
             notes.append(f"fallback used ({res.reason})")
         if res.reason.startswith("gate"):
             notes.append("stopped by gate (0 LLM calls)")

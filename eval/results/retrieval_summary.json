@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-20 03:24:22",
+  "generated_at": "2026-11-20 21:46:16",
   "top_k": 3,
   "mode": "hybrid",
   "overall": {
@@ -8,7 +8,7 @@
     "pass": 66,
     "recall_at_1": 0.627,
     "recall_at_3": 0.922,
-    "avg_latency_ms": 31.964,
+    "avg_latency_ms": 29.736,
     "leaks": 0
   },
   "by_category": {
@@ -18,7 +18,7 @@
       "pass": 18,
       "recall_at_1": 0.75,
       "recall_at_3": 1.0,
-      "avg_latency_ms": 24.722,
+      "avg_latency_ms": 26.829,
       "leaks": 0
     },
     "paraphrase": {
@@ -27,7 +27,7 @@
       "pass": 23,
       "recall_at_1": 0.812,
       "recall_at_3": 0.958,
-      "avg_latency_ms": 33.39,
+      "avg_latency_ms": 30.715,
       "leaks": 0
     },
     "same_section": {
@@ -36,7 +36,7 @@
       "pass": 9,
       "recall_at_1": 0.417,
       "recall_at_3": 0.95,
-      "avg_latency_ms": 36.741,
+      "avg_latency_ms": 29.584,
       "leaks": 0
     },
     "multi_hop": {
@@ -45,7 +45,7 @@
       "pass": 8,
       "recall_at_1": 0.372,
       "recall_at_3": 0.821,
-      "avg_latency_ms": 42.959,
+      "avg_latency_ms": 38.333,
       "leaks": 0
     },
     "edge": {
@@ -54,7 +54,7 @@
       "pass": 4,
       "recall_at_1": 0.8,
       "recall_at_3": 0.8,
-      "avg_latency_ms": 25.094,
+      "avg_latency_ms": 26.936,
       "leaks": 0
     },
     "cross_company": {
@@ -63,7 +63,7 @@
       "pass": 3,
       "recall_at_1": 0.333,
       "recall_at_3": 1.0,
-      "avg_latency_ms": 29.51,
+      "avg_latency_ms": 29.543,
       "leaks": 0
     },
     "injection": {
@@ -72,7 +72,7 @@
       "pass": 1,
       "recall_at_1": 0.0,
       "recall_at_3": 0.5,
-      "avg_latency_ms": 33.685,
+      "avg_latency_ms": 31.14,
       "leaks": 0
     },
     "not_covered": {
@@ -81,7 +81,7 @@
       "pass": 0,
       "recall_at_1": null,
       "recall_at_3": null,
-      "avg_latency_ms": 26.728,
+      "avg_latency_ms": 22.547,
       "leaks": 0
     }
   },
@@ -92,7 +92,7 @@
       "pass": 20,
       "recall_at_1": 0.573,
       "recall_at_3": 0.88,
-      "avg_latency_ms": 30.734,
+      "avg_latency_ms": 34.049,
       "leaks": 0
     },
     "bolt": {
@@ -101,7 +101,7 @@
       "pass": 23,
       "recall_at_1": 0.679,
       "recall_at_3": 0.929,
-      "avg_latency_ms": 33.224,
+      "avg_latency_ms": 28.184,
       "leaks": 0
     },
     "crest": {
@@ -110,7 +110,7 @@
       "pass": 23,
       "recall_at_1": 0.625,
       "recall_at_3": 0.958,
-      "avg_latency_ms": 31.935,
+      "avg_latency_ms": 26.975,
       "leaks": 0
     }
   }
