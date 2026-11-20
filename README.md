@@ -14,6 +14,8 @@ docker compose up
 ```
 Then open **http://localhost:8000/docs** (Swagger UI).
 
+> **"port is already allocated"?** Something else is using port 8000. Stop it, or pick another port: `APP_PORT=8010 docker compose up`, then open http://localhost:8010/docs.
+
 - **No API key needed.** Without one, the service runs in **offline mode** with a deterministic fake LLM (`/health` shows `"llm_provider": "fake"`). Everything works except that answers are a canned first sentence of the top excerpt.
 - **Real answers:** `cp .env.example .env`, set `GROQ_API_KEY` (free at https://console.groq.com/keys), then `docker compose up` again.
 - The first build takes a few minutes: the embedding model (~0.5 GB) is baked into the image so the container never downloads anything at runtime (image ~1.9 GB, ~1.3 GB RAM). The first start seeds the three policies (~15 s); later starts take a few seconds.
