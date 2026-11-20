@@ -166,7 +166,25 @@ def test_no_fallback_after_rewrite_never_a_third_call(store, rw_settings):
     assert len(llm.calls) == 2 <= MAX_LLM_CALLS
 
 
-def test_gate_stops_off_topic_before_any_rewrite(store, rw_settings):
+def test_gate_stops_off_topic_before_the_answer_call(store, rw_settings):
+    # FakeLLM's rewrite echoes the question; its best match is far away -> gate.
     llm = FakeLLM()
     r = ask(store, llm, "acme", "Write me a poem about cats", rw_settings)
-    assert r.status == "not_covered" and llm.calls == []
+    assert r.status == "not_covered" and r.answer == messages.NOT_COVERED
+    assert len(llm.calls) == 1 and "<outline>" in llm.calls[0]["user"]   # rewrite only
+    assert "gate" in r.reason
+
+
+def test_off_topic_verdict_stops_after_the_rewrite(store, rw_settings):
+    llm = FakeLLM(script=[json.dumps({"verdict": "off_topic", "queries": []})])
+    r = ask(store, llm, "acme", "Who won the cricket world cup?", rw_settings)
+    assert r.status == "not_covered" and r.answer == messages.NOT_COVERED and len(llm.calls) == 1
+
+
+def test_no_retrieval_before_the_rewrite(store, rw_settings, monkeypatch):
+    import app.pipeline as pipeline_module
+    seen = []
+    real = pipeline_module.retrieve
+    monkeypatch.setattr(pipeline_module, "retrieve", lambda *a, **k: seen.append(k) or real(*a, **k))
+    ask(store, FakeLLM(script=[REWRITE, answer()]), "acme", Q, rw_settings)
+    assert len(seen) == 1 and seen[0]["rewrites"] == ["cancellation window", "no-show penalty suspension"]

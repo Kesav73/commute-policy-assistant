@@ -68,12 +68,14 @@ def test_rewrites_only_and_original_plus_rewrites(store):
         assert len(r.chunks) == 3 and {c.company_id for c in r.chunks} == {"acme"}
 
 
-def test_gate_uses_the_original_question(store):
-    # A rewrite must not turn an off-topic question into "covered".
-    r = retrieve(store, "acme", "Write me a poem about cats",
-                 rewrites=["escort for women on night drops"], include_original=False)
-    assert not r.has_evidence
-
+def test_gate_uses_the_best_distance_of_the_searched_queries(store):
+    from app.retriever import rank_candidates
+    qs = ["Write me a poem about cats", "escort for women on night drops"]
+    r = retrieve(store, "acme", "Write me a poem about cats", rewrites=qs, include_original=False)
+    best = min(rank_candidates(store, "acme", q).best_distance for q in qs)
+    assert r.best_distance == pytest.approx(best) and r.has_evidence
+    off = retrieve(store, "acme", "x", rewrites=["Write me a poem about cats"], include_original=False)
+    assert not off.has_evidence
 
 def test_round_robin_gives_each_subquery_its_best_hit():
     from app.retriever import round_robin, rrf

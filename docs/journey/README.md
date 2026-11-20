@@ -43,3 +43,4 @@ A running log of every experiment and improvement: what we tried, how we measure
 | 15 | 2026-11-20 | [Never a hang](15-no-hangs.md) | Hard limits on retrieval (1.0 s), each LLM call (total time), whole request (3.0 s backstop); forced-hang tests: 503 in 0.5 s |
 | 16 | 2026-11-20 | [Policy versioning](16-policy-versioning.md) | Build beside → verify → atomic pointer flip; live update on a running container, failures/crashes keep the old version; found + fixed a cold-start bug |
 | 17 | 2026-11-20 | [Final end-to-end run](17-final-e2e-run.md) | Submission code: 83/90, facts 69/75, citations 71/75, 0 leaks, p95 1.25 s, ≤ 2 calls, ≤ 3 citations |
+| 18 | 2026-11-20 | [Simpler pipeline](18-simpler-pipeline.md) | Dropped the retrieval before the rewrite: rewrite → one retrieval → gate → answer; cached rerun: identical 83/90 |

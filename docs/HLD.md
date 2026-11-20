@@ -210,21 +210,28 @@ The collection name is built in code from the token's `company_id` and the **act
 
 ### 6.1 Ask
 ```
- 1. Auth           verify JWT → Principal(company_id="acme")             [401 on any doubt]
- 2. Input guard    trim; 3–500 chars; reject empty / control chars       [422]
- 3. Resolve        collection = "policy__acme"  (from token)             [missing → not_covered]
- 4. Retrieve       embed question → top-3 from THAT collection only
- 5. Resolve ids    look each id up in acme's chunk store; not there or     [else: drop + log ALERT]
-                  company_id != "acme"
- 6. Evidence gate  best similarity < τ  → not_covered (0 LLM calls)
- 7. Answer         1 LLM call; excerpts labelled [S1] [S2] [S3]; JSON out
- 8. Validate       parse JSON; status ∈ {answered, not_covered};
-                   cited labels ⊆ {S1..S3}; ≥1 citation if answered
-                   ├ call failed / malformed → 2nd call to the FALLBACK model if ≥0.6 s left, else 503
-                   └ bad labels → not_covered (never show an unsupported claim)
+ 1. Auth           verify JWT → Principal(company_id="acme")                 [401 on any doubt]
+ 2. Input shape    trim; 3–500 chars; no control chars; no extra fields      [422]
+ 3. Pin version    acme's ACTIVE version from active.json, used by every step below
+                   no policy → not_covered
+ 4. LLM call 1     rewrite + input verdict (outline = acme's section titles only)
+                   → {"verdict": ok|injection|other_company|off_topic, "queries": [1–3]}
+                   pure attack / off-topic → plain message, stop (1 call)
+                   rewrite failed → search the original question instead
+ 5. Retrieve       ONE hybrid search (nomic vectors + stemmed BM25, RRF 2:1) per query
+                   in policy__acme__v<n>; queries merged round-robin → top 3
+                   every id checked against acme's chunk store       [else: drop + log ALERT]
+ 6. Evidence gate  best distance > 0.50 → not_covered (no answer call)
+ 7. LLM call 2     answer; excerpts labelled S1–S3 (data, not instructions); JSON out;
+                   may return "blocked"
+ 8. Validate       JSON; status ∈ {answered, not_covered, blocked}; cited labels ⊆ {S1..S3};
+                   ≥ 1 citation; no other company's name; no echoed injection
+                   ├ call failed / malformed → 503 "try again" (no call left)
+                   └ any check fails → not_covered (never show an unsupported claim)
  9. Map            labels → {doc_id, title, section, section_title}  (code, not model)
-10. Respond        + request_id; log latency breakdown and llm_calls
+10. Respond        + request_id, policy_version; log latency breakdown and llm_calls
 ```
+With `QUERY_REWRITE=off`: step 4 is skipped, step 7 is call 1, and a failed call 1 gets call 2 on the fallback model.
 
 ### 6.2 Publish a policy version (R2, R3) — `app/versioning.py`
 ```
@@ -303,9 +310,8 @@ Every stage has a **hard wall-clock limit** (journey 15), so nothing can hang:
 | Step | Typical | Hard limit → on hit |
 |---|---|---|
 | JWT verify + input checks | < 5 ms | — |
-| Retrieval, original question (embed + Chroma + BM25) | ~30–90 ms | `RETRIEVAL_TIMEOUT_S` 1.0 s → 503 "try again" |
-| LLM call 1: rewrite + input verdict | p50 0.43 s, p95 0.74 s | `REWRITE_TIMEOUT_S` 1.2 s (total time) → keep original chunks |
-| Retrieval with rewritten queries | ~60–90 ms | 1.0 s, and must leave 0.6 s for the answer → keep original chunks |
+| LLM call 1: rewrite + input verdict | p50 0.43 s, p95 0.74 s | `REWRITE_TIMEOUT_S` 1.2 s (total time) → search the original question |
+| Retrieval (the rewritten queries, or the original question) | ~30–90 ms | `RETRIEVAL_TIMEOUT_S` 1.0 s, and must leave 0.6 s for the answer → 503 "try again" |
 | LLM call 2: answer | ~0.3–0.8 s | what's left of the 2.8 s deadline (≤ `LLM_TIMEOUT_S` 2.0 s, total time) → 503 "try again" |
 | Validate + guardrails + respond | < 5 ms | — |
 | **Overall pipeline deadline** | | **2.8 s** (`ANSWER_DEADLINE_S`): no call is started that can't plausibly finish |
@@ -327,7 +333,7 @@ Measured by the eval runner (p50 and p95 per mode) and reported in the evaluatio
 | LLM output malformed twice | Same "try again" | 503 | 2 |
 | LLM cites labels that don't exist | Not-covered message (never show an unsupported claim) | 200 `not_covered` | 1 |
 | Retrieval error, slow (> 1.0 s) or hanging | "Try again" | 503 | 0 |
-| Rewritten-query retrieval slow or failing | Answer from the original question's chunks | 200 | 2 |
+| Rewrite call fails or times out | Search with the original question, then answer | 200 | 2 |
 | Anything stuck past 3.0 s | "Try again" (request backstop) | 503 | — |
 | Bad or expired token | "Please sign in again." | 401 | 0 |
 | Empty / too long question | "Please enter a question between 3 and 500 characters." | 422 | 0 |

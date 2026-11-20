@@ -62,11 +62,12 @@ def test_hanging_retrieval_gives_try_again_fast(store, monkeypatch):
     llm = FakeLLM()
     r, took = timed(ask, store, llm, "acme", Q, s)
     assert r.status == "unavailable" and r.answer == messages.TRY_AGAIN
-    assert r.reason == "retrieval timeout" and llm.calls == []
+    assert r.reason == "retrieval timeout"
+    assert all("<outline>" in c["user"] for c in llm.calls)    # at most the rewrite: no answer call
     assert took < 1.0
 
 
-def test_hanging_rewritten_retrieval_keeps_original_chunks(store, monkeypatch):
+def test_hanging_retrieval_after_the_rewrite_gives_try_again(store, monkeypatch):
     real = pipeline_module.retrieve
 
     def slow_for_rewrites(*a, **k):
@@ -76,12 +77,11 @@ def test_hanging_rewritten_retrieval_keeps_original_chunks(store, monkeypatch):
 
     monkeypatch.setattr(pipeline_module, "retrieve", slow_for_rewrites)
     s = replace(get_settings(), query_rewrite=True, retrieval_timeout_s=0.3)
-    llm = FakeLLM(script=[json.dumps({"queries": ["escort"]}),
-                          json.dumps({"status": "answered", "answer": "Escort after 8:00 PM.",
-                                      "citations": ["S1"]})])
+    llm = FakeLLM(script=[json.dumps({"queries": ["escort"]})])
     r, took = timed(ask, store, llm, "acme", Q, s)
-    assert r.status == "answered" and "rewritten retrieval timeout" in r.reason
-    assert took < 1.5
+    assert r.status == "unavailable" and r.reason == "retrieval timeout"
+    assert len(llm.calls) == 1 and took < 1.5        # rewrite only; no answer call
+
 
 
 # ------------------------------------------------------------------- LLM --

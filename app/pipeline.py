@@ -1,16 +1,16 @@
-"""The ask flow: question -> retrieve -> gate -> LLM (max 2 calls) -> checked answer.
+"""The ask flow: question -> (rewrite) -> retrieve -> gate -> answer -> checked answer.
 
-    1. retrieve from the caller's company only, with the ORIGINAL question
-    2. evidence gate: nothing close enough -> not_covered, 0 LLM calls
-    With QUERY_REWRITE=on (default, docs/journey/13):
-    3. call 1: rewrite the question into 1-3 search queries (policy outline as context);
-       retrieve again with those queries, merged round-robin, top 3.
-       If the rewrite fails, keep the step-1 chunks (harmless).
-    4. call 2: answer (primary model). No fallback model is left: if it fails -> "try again".
-    With QUERY_REWRITE=off:
-    3. call 1: answer with the primary model (Qwen)
-    4. if call 1 failed for ANY reason and there is time left -> call 2: fallback model
-    Never a 3rd call (PS.md C2).
+    1. pin the caller's company's ACTIVE policy version for the whole request
+    With QUERY_REWRITE=on (default, docs/journey/13 and 18):
+    2. call 1: rewrite the question into 1-3 search queries (policy outline as context)
+       and judge it (input guard). A pure attack / off-topic question stops here.
+       If the rewrite fails, the original question is searched instead.
+    3. ONE hybrid retrieval for those queries, merged round-robin, top 3
+    4. evidence gate: nothing close enough -> not_covered, no answer call
+    5. call 2: answer. No fallback model is left: if it fails -> "try again".
+    With QUERY_REWRITE=off: retrieve the original question, gate, then call 1 answers
+    and call 2 is the fallback model.
+    Never a 3rd call (PS.md C2). Every stage has a hard time limit (journey 15).
 
 Try it:  python -m app.pipeline acme "Can I book a cab on Saturday?"
 """
@@ -59,7 +59,7 @@ def ask(store: PolicyStore, llm: LLM, company_id: str, question: str,
     t_start = time.perf_counter()
     deadline = t_start + s.answer_deadline_s
     question = " ".join(question.split())  # collapse whitespace / newlines
-    version: int | None = None   # pinned below, inside the guarded retrieval step
+    version: int | None = None   # pinned in step 1
 
     def done(status: str, answer: str, citations: list[Citation], reason: str,
              calls: int = 0, models: list[str] | None = None) -> AskResult:
@@ -69,33 +69,23 @@ def ask(store: PolicyStore, llm: LLM, company_id: str, question: str,
         return AskResult(status, answer, citations, rid, calls, models or [], reason,
                          retrieved, timings, version)
 
-    # 1-2. Retrieval + evidence gate --------------------------------------------
     timings: dict = {}
     retrieved: list[dict] = []
-    try:
-        # Pin the company's ACTIVE policy version once. Every step below (retrieval,
-        # rewrite outline, citations) uses this version, so a switch to a new version
-        # in the middle of this request can't mix two versions (PS.md R2).
-        version = store.active_version(company_id)
-        # Hard cap: a stuck embedding or vector search can't hold the request (R10).
-        r = run_with_timeout(retrieve, min(s.retrieval_timeout_s, deadline - time.perf_counter()),
-                             store, company_id, question, version=version)
-    except StageTimeout as e:
-        log.warning("retrieval timed out rid=%s: %s", rid, e)
-        return done("unavailable", messages.TRY_AGAIN, [], "retrieval timeout")
-    except Exception:
-        log.exception("retrieval failed rid=%s", rid)
-        return done("unavailable", messages.TRY_AGAIN, [], "retrieval error")
-    timings.update({f"retrieve_{k}": v for k, v in r.timings_ms.items()})
-    retrieved = [{"section": c.section, "distance": round(c.distance, 3)} for c in r.chunks]
-
-    if not r.has_evidence:
-        return done("not_covered", messages.NOT_COVERED, [],
-                    f"gate (best distance {r.best_distance:.3f})" if r.chunks else "no policy")
-
     models_used, failures = [], []
 
-    # 3. Query rewrite (LLM call 1 of 2) ------------------------------------------
+    # 1. Pin the company's ACTIVE policy version once. Every step below (rewrite
+    #    outline, retrieval, citations) uses it, so a switch to a new version in the
+    #    middle of this request can't mix two versions (PS.md R2).
+    try:
+        version = store.active_version(company_id)
+    except Exception:
+        log.exception("store unavailable rid=%s", rid)
+        return done("unavailable", messages.TRY_AGAIN, [], "store error")
+    if version is None:
+        return done("not_covered", messages.NOT_COVERED, [], "no policy")
+
+    # 2. Query rewrite + input guard (LLM call 1 of 2) -----------------------------
+    queries: list[str] | None = None          # None = search with the original question
     if s.query_rewrite:
         budget = min(s.rewrite_timeout_s, deadline - time.perf_counter() - MIN_TIME_FOR_CALL_S)
         if budget >= 0.3:
@@ -104,8 +94,8 @@ def ask(store: PolicyStore, llm: LLM, company_id: str, question: str,
             rw = rewrite_query(llm, store, company_id, question, s.llm_model, budget, version)
             timings["rewrite"] = round((time.perf_counter() - t0) * 1000, 1)
             if rw.ok and rw.verdict != "ok" and not rw.queries:
-                # Guardrail (input): an attack / other-company request with no real
-                # transport question in it. Stop here: 1 call used, no answer call.
+                # Guardrail (input): an attack / other-company / off-topic request with
+                # no real transport question in it. Stop here: 1 call, no answer call.
                 timings["rewrite_verdict"] = rw.verdict
                 return done("not_covered", messages.GUARDRAIL if rw.verdict != "off_topic"
                             else messages.NOT_COVERED, [], f"guardrail: input {rw.verdict}",
@@ -113,28 +103,41 @@ def ask(store: PolicyStore, llm: LLM, company_id: str, question: str,
             if rw.ok and rw.verdict != "ok":
                 failures.append(f"input flagged {rw.verdict}; answering the transport part only")
             if rw.ok and rw.queries:
-                try:
-                    # Leave the answer call its minimum time; on timeout keep step-1 chunks.
-                    limit = min(s.retrieval_timeout_s,
-                                deadline - time.perf_counter() - MIN_TIME_FOR_CALL_S)
-                    r = run_with_timeout(retrieve, limit, store, company_id, question,
-                                         rewrites=rw.queries, include_original=False,
-                                         fusion="round_robin", version=version)
-                    timings["retrieve_rewritten"] = r.timings_ms.get("multi_query")
-                    retrieved = [{"section": c.section, "distance": round(c.distance, 3)}
-                                 for c in r.chunks]
-                except StageTimeout:
-                    log.warning("rewritten retrieval timed out rid=%s; using original chunks", rid)
-                    failures.append("rewritten retrieval timeout")
-                except Exception:
-                    log.exception("rewritten retrieval failed rid=%s; using original chunks", rid)
-                    failures.append("rewritten retrieval error")
+                queries = rw.queries
             else:
-                failures.append(f"rewrite: {rw.error or 'no queries'}")
+                failures.append(f"rewrite: {rw.error or 'no queries'}; searching the original question")
         else:
             failures.append("rewrite skipped: no time")
 
-    # 4. Answer (the remaining LLM calls) -------------------------------------------
+    # 3. ONE retrieval: the rewritten queries (merged round-robin), or the original
+    #    question if there are none. Hard time limit, leaving the answer call its time.
+    try:
+        limit = min(s.retrieval_timeout_s,
+                    deadline - time.perf_counter() - (MIN_TIME_FOR_CALL_S if models_used else 0))
+        if queries:
+            r = run_with_timeout(retrieve, limit, store, company_id, question, rewrites=queries,
+                                 include_original=False, fusion="round_robin", version=version)
+        else:
+            r = run_with_timeout(retrieve, limit, store, company_id, question, version=version)
+    except StageTimeout as e:
+        log.warning("retrieval timed out rid=%s: %s", rid, e)
+        return done("unavailable", messages.TRY_AGAIN, [], "retrieval timeout",
+                    len(models_used), models_used)
+    except Exception:
+        log.exception("retrieval failed rid=%s", rid)
+        return done("unavailable", messages.TRY_AGAIN, [], "retrieval error",
+                    len(models_used), models_used)
+    timings.update({f"retrieve_{k}": v for k, v in r.timings_ms.items()})
+    retrieved = [{"section": c.section, "distance": round(c.distance, 3)} for c in r.chunks]
+
+    # 4. Evidence gate: nothing close enough -> "not covered", no answer call.
+    if not r.has_evidence:
+        return done("not_covered", messages.NOT_COVERED, [],
+                    "; ".join(failures + [f"gate (best distance {r.best_distance:.3f})"
+                                          if r.chunks else "no policy"]),
+                    len(models_used), models_used)
+
+    # 5. Answer (the remaining LLM calls) -------------------------------------------
     user_prompt = build_user_prompt(question, r.chunks)
     answer_models = (s.llm_model, s.llm_fallback_model)[:MAX_LLM_CALLS - len(models_used)]
     for model in answer_models:

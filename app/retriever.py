@@ -169,26 +169,24 @@ def _retrieve_multi(store, company_id, question, rewrites, k, max_distance, mode
     """Search with the rewritten queries (and, if include_original, the original
     question too); fuse all rankings with RRF and keep the top k.
 
-    Variant A (include_original=False): only the rewrites decide the chunks.
-    Variant B (include_original=True): the original is one more ranking, so a poor
-    rewrite can add candidates but can't drop what plain retrieval finds.
-    Either way the gate uses the ORIGINAL question's best distance: a rewrite must
-    not turn an off-topic question into "covered".
+    include_original=False (what the app uses): only the rewrites decide the chunks.
+    include_original=True: the original question is one more ranking.
+    The gate uses the best distance any searched query reached.
     """
     t0 = time.perf_counter()
     if version is None:
         version = store.active_version(company_id)   # one version for every query
-    original = rank_candidates(store, company_id, question, mode=mode, pool=None, version=version)
-    if original is None:
-        return RetrievalResult(company_id, question, [], False, max_distance)
+    queries = [question, *rewrites] if include_original else list(rewrites)
     ranked = [rank_candidates(store, company_id, q, mode=mode, pool=None, version=version)
-              for q in rewrites]
-    if include_original:
-        ranked = [original, *ranked]
+              for q in queries]
+    if any(c is None for c in ranked):
+        return RetrievalResult(company_id, question, [], False, max_distance)
     by_id = {c.id: c for cand in ranked for c in cand.chunks}
     rankings = [[c.id for c in cand.chunks] for cand in ranked]
     order = round_robin(rankings) if fusion == "round_robin" else rrf(rankings)
-    best = original.best_distance
+    # Gate signal: the closest match any searched query found. (Off-topic questions
+    # are stopped earlier by the rewriter's verdict; this catches what slips past.)
+    best = min((c.best_distance for c in ranked if c.best_distance is not None), default=None)
     return RetrievalResult(
         company_id=company_id, question=question, chunks=[by_id[i] for i in order[:k]],
         has_evidence=best is not None and best <= max_distance, max_distance=max_distance,
