@@ -30,10 +30,10 @@ from collections import defaultdict
 from pathlib import Path
 
 from app.config import get_settings
-from app.ingest import ingest_all
 from app.policy_parser import parse_policy_file
 from app.retriever import TOP_K, retrieve
-from app.store import open_store
+from app.store import PolicyStore
+from app.versioning import ingest_all
 
 EVAL_DIR = Path(__file__).resolve().parent
 QUESTIONS = EVAL_DIR / "questions.jsonl"
@@ -167,13 +167,13 @@ def main() -> None:
 
     # Fresh, throwaway store: the score never depends on leftover local data.
     with tempfile.TemporaryDirectory() as tmp:
-        store = open_store(Path(tmp))
+        store = PolicyStore(Path(tmp))
         ingest_all(store, s.policies_dir)
-        retrieve(store, cases[0]["company"], "warm up")   # load the model before timing
+        retrieve(store, cases[0]["company"], ["warm up"])   # load the model before timing
         rows = []
         for c in cases:
             t0 = time.perf_counter()
-            r = retrieve(store, c["company"], c["question"])
+            r = retrieve(store, c["company"], [c["question"]])
             latency_ms = (time.perf_counter() - t0) * 1000
             ranked = [ch.section for ch in r.chunks]
             distances = [round(ch.distance, 3) for ch in r.chunks]
@@ -191,10 +191,8 @@ def main() -> None:
     RESULTS_DIR.mkdir(exist_ok=True)
     (RESULTS_DIR / "retrieval.jsonl").write_text("\n".join(json.dumps(r) for r in rows) + "\n")
     (RESULTS_DIR / "retrieval_summary.json").write_text(json.dumps(
-        {"generated_at": time.strftime("%Y-%m-%d %H:%M:%S"), "top_k": TOP_K,
-         "mode": s.retrieval_mode, **summary}, indent=2))
+        {"generated_at": time.strftime("%Y-%m-%d %H:%M:%S"), "top_k": TOP_K, **summary}, indent=2))
 
-    print(f"\nretrieval mode: {s.retrieval_mode}   (set RETRIEVAL_MODE=vector|hybrid)")
     print_scorecard(summary)
     failures = [r for r in rows if not r["pass"]]
     print(f"\nfailed cases ({len(failures)}):")

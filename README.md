@@ -30,7 +30,7 @@ python3.12 -m venv .venv && .venv/bin/pip install -r requirements.txt
 ## Check it
 
 ```bash
-docker compose run --rm app pytest -q                          # 240 tests (~15 s), fake LLM, no key needed
+docker compose run --rm app pytest -q                          # 217 tests (~20 s), fake LLM, no key needed
 docker compose run --rm app python -m eval.run_retrieval       # retrieval scorecard, no key needed
 docker compose run --rm app python -m eval.run_e2e --offline   # every eval question through POST /ask, fake LLM
 docker compose run --rm app python -m eval.run_e2e             # same with the real LLM (needs GROQ_API_KEY, ~35 min)
@@ -92,7 +92,7 @@ flowchart TB
 
 When a limit is hit, the employee gets a clear "please try again" instead of a hang.
 
-Full design: [docs/HLD.md](docs/HLD.md).
+Full design: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ## Design decisions
 
@@ -105,6 +105,7 @@ Full design: [docs/HLD.md](docs/HLD.md).
 | **Hybrid search:** vectors + stemmed keyword search (BM25), merged by weighted rank fusion | Catches exact terms ("HR Head", "no-show") that embeddings blur; < 0.5 ms; matched the best re-ranker at a fraction of the cost |
 | **Query rewriting before retrieval,** with the company's section titles as context; sub-queries merged round-robin | Turns everyday wording and multi-part questions into the policy's own topics: recall@3 0.92 → 0.98 |
 | **The model never writes a citation:** it only picks excerpt labels S1–S3; code maps them to document and section | Citations can't be invented, misspelled or point at another company |
+| **A fallback model** (gpt-oss-120b): used for the answer when the primary model (Qwen) failed on call 1 | The service keeps answering when one model is down, still within 2 calls |
 | **Guardrails in three places, no extra LLM calls:** input (verdict inside the rewrite call), chunks (instruction-like text quarantined at ingestion), output (refusal option in the answer call + code checks) | Code has the final word, because model output is untrusted |
 | **"Not covered" and refusal messages are fixed text in code,** always pointing to the transport desk | Consistent, never a guess, easy to change |
 | **Policy versions built beside the live one,** verified, then switched by one atomic file rename; each request pinned to one version | A failed or interrupted update never leaves a half-updated policy; no restart or rebuild |
@@ -136,13 +137,13 @@ From the final run on this code, real LLM, 90 questions (details in [EVALUATION.
 | Normal question: call 1 rewrites and checks, call 2 answers | 2 |
 | Never | 3 |
 
-There is no retry loop. If the rewrite fails, we search with the original question (no new call). If the answer call fails, the employee gets "please try again".
+There is no retry loop. If the rewrite fails, we search with the original question (no new call), and if it failed because the model is down, the answer call goes to the **fallback model** (gpt-oss-120b). If the answer call itself fails after a successful rewrite, the employee gets "please try again".
 
 **Cited chunks:** retrieval returns exactly **3** chunks, the model sees only those 3 (labelled S1–S3), may cite only those labels, and the parser keeps **at most 3** citations, dropping anything else. The model reads the same 3 chunks it is allowed to cite, so every fact in an answer traces to a shown citation.
 
 ## Trade-offs
 
-- **How the two LLM calls are used.** A typical RAG design spends separate calls on rewriting, input screening, answering and a grounding check. With two calls we merged them: call 1 rewrites *and* judges the question, call 2 answers *and* can refuse, and the remaining checks are code. Cost: ~0.5 s per question and no backup model for the answer call. Gain: the biggest single improvement (answers 79 → 83 / 90).
+- **How the two LLM calls are used.** A typical RAG design spends separate calls on rewriting, input screening, answering and a grounding check. With two calls we merged them: call 1 rewrites *and* judges the question, call 2 answers *and* can refuse, and the remaining checks are code. Cost: ~0.5 s per question; the fallback model is only reachable when call 1 failed. Gain: the biggest single improvement (answers 79 → 83 / 90).
 - **Hybrid search instead of a re-ranker.** The best of four re-rankers only tied hybrid search, at ~1 s extra per question and a 0.6 GB model.
 - **One collection per company (and version)** instead of one shared collection with a filter: isolation by construction, at the cost of more collections. Cross-company queries aren't needed.
 - **Exact-match answer cache only,** no "similar question" matching: fewer cache hits, but never the answer to a different question ("drop *at* 9 PM" vs. "*after* 9 PM").
@@ -156,7 +157,6 @@ There is no retry loop. If the rewrite fails, we search with the original questi
 | `POST /auth/token` | — | Mock identity provider: `{"employee_id": "E-ACME-001"}` → JWT carrying company and role (from `sample_data/employees.json`) |
 | `POST /ask` | Bearer token | `{"question": "..."}` → `{status, answer, citations[doc_id, title, section, section_title], request_id, policy_version, cached}` |
 | `POST /admin/policies` | Admin token | `{"markdown": "..."}` → publishes a new version of the admin's own company policy; returns version and changed sections |
-| `GET /me` | Bearer token | Who the token says you are |
 | `GET /health` | — | Status, LLM mode, live policy version and chunk count per company |
 
 `status` is `answered` or `not_covered`. Errors use one shape, `{"error", "message"}`:
@@ -174,8 +174,6 @@ Everything works with defaults; set in `.env` (see `.env.example`):
 |---|---|---|
 | `GROQ_API_KEY` | — | Real LLM answers; without it, offline mode |
 | `JWT_SECRET` | auto-generated, saved in the volume | Token signing secret (≥ 32 characters if set) |
-| `QUERY_REWRITE` | `on` | `off`: call 1 answers and call 2 is a fallback model |
-| `RETRIEVAL_MODE` | `hybrid` | `vector` to disable keyword search |
 | `RETRIEVAL_MAX_DISTANCE` | `0.50` | Evidence-gate threshold |
 | `RETRIEVAL_TIMEOUT_S` / `REWRITE_TIMEOUT_S` / `LLM_TIMEOUT_S` / `ANSWER_DEADLINE_S` / `REQUEST_TIMEOUT_S` | 1.0 / 1.2 / 2.0 / 2.8 / 3.0 | Time limits |
 | `ANSWER_CACHE_SIZE` / `ANSWER_CACHE_TTL_S` | 1000 / 21600 | Answer cache (0 disables) |
@@ -184,35 +182,34 @@ Everything works with defaults; set in `.env` (see `.env.example`):
 
 ```
 app/
-  main.py           HTTP layer: endpoints, request/response models, error handling, request time limit
+  main.py           the 4 endpoints, request/response models, errors, startup, request time limit
   auth.py           JWT issue (mock) and verify; company and role come only from the token
-  config.py         settings from the environment / .env
+  config.py         settings from the environment / .env; the two model names
   pipeline.py       the /ask flow: pin version -> rewrite -> retrieve -> gate -> answer -> checks
   rewriter.py       LLM call 1: query rewriting + input verdict
   retriever.py      hybrid retrieval (vectors + BM25), rank fusion, round-robin merge, warm-up
-  bm25.py           stemmed keyword index per company
+  bm25.py           stemmed keyword search over one company's chunks
   embeddings.py     nomic-embed-text-v1.5 with query/document prefixes
-  answerer.py       LLM call 2: answer prompt, output parsing, label -> citation mapping
+  answerer.py       LLM call 2: answer prompt, output parsing, label -> citation
   guardrails.py     instruction-like text detection, output checks
-  llm.py            Groq client (total-time limit) + fake LLM for tests/offline
+  llm.py            Groq client (total-time limit) + fake LLM for tests and offline mode
   policy_parser.py  markdown policy -> chunks (one per sub-section)
-  store.py          Chroma collections per company + version, active-version pointer
-  chunk_store.py    chunk text + metadata per company + version (source of truth)
-  versioning.py     publish a version safely; startup bootstrap and cleanup
-  ingest.py         publish policy files (CLI and tests)
+  store.py          chunk files + Chroma collections per company and version, the live-version switch
+  versioning.py     publish a version safely; startup bootstrap; CLI
   answer_cache.py   cache keyed by company + policy version + question
   timeouts.py       hard time limit for blocking steps
   messages.py       every message an employee can see
-eval/               evaluation set, scorers, benchmarks, committed results
-tests/              240 tests (fake LLM)
+eval/               evaluation set, scorers, retrieval benchmarks, committed results
+tests/              automated tests (fake LLM, no key needed)
 policies/           seed policies for the three companies
 sample_data/        mock employee directory; example policy updates
-docs/               design (HLD), brief + requirement checklist (PS), policy answer key
+docs/               architecture, design decisions, requirements checklist, policy answer key
 ```
 
 ## Docs
 
 - [EVALUATION.md](EVALUATION.md): test scenarios, method, results, before and after, limitations, trade-offs
-- [docs/HLD.md](docs/HLD.md): detailed design
-- [docs/PS.md](docs/PS.md): the brief, restated, with a requirement-by-requirement checklist
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md): components, the ask and publish flows, storage, time limits
+- [docs/DESIGN_DECISIONS.md](docs/DESIGN_DECISIONS.md): every decision with why, alternatives and cost
+- [docs/REQUIREMENTS.md](docs/REQUIREMENTS.md): the brief, condensed, with a requirement-by-requirement checklist
 - [docs/POLICY_MATRIX.md](docs/POLICY_MATRIX.md): how the three policies differ (the answer key behind the evaluation set)

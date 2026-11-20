@@ -1,11 +1,10 @@
-"""Prompt building and output validation.
+"""LLM call 2: the answer prompt, and the checks on what comes back.
 
-The model's job is narrow: read at most 3 excerpts, write 1-3 sentences, and say
-which excerpt labels (S1..S3) support them. Everything else is code:
-
-  * the model never sees a doc_id, file name or other company - only S1..S3
+The model's job is narrow: read 3 excerpts labelled S1-S3, write 1-3 sentences, and
+say which labels support them. Everything else is code:
+  * the model never sees a document id or another company - only S1..S3
   * the model never writes a citation - code maps S1..S3 back to real sections
-  * its output is untrusted: parsed, checked and, if unsupported, downgraded
+  * its output is untrusted: parsed, checked, and if unsupported, not shown
 """
 import json
 import re
@@ -103,14 +102,14 @@ def parse_answer(raw: str, chunks: list[RetrievedChunk]) -> Answer:
 
     # Map labels -> real chunks. Anything that isn't one of OUR labels is unsupported.
     picked, bad = [], []
-    for c in cites:
-        m = _LABEL_RE.match(str(c).strip())
-        idx = int(m.group(1)) - 1 if m else -1
-        if 0 <= idx < len(chunks):
-            if idx not in picked:
-                picked.append(idx)
+    for label_text in cites:
+        match = _LABEL_RE.match(str(label_text).strip())          # "S1", "[S1]", "s 1" all accepted
+        index = int(match.group(1)) - 1 if match else -1
+        if 0 <= index < len(chunks):
+            if index not in picked:
+                picked.append(index)
         else:
-            bad.append(str(c)[:20])
+            bad.append(str(label_text)[:20])
 
     # An answer must rest on evidence we actually gave it. Otherwise: not covered.
     if bad:

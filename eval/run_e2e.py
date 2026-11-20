@@ -22,8 +22,8 @@ Scorecard (the same every run):
     1. Answer quality   pass, status, facts, citation          (count / applicable cases)
     2. Safety           leaks, forbidden text, confidently wrong (not_covered expected,
                         but answered) - all must be 0
-    3. Budgets          latency p50/p95/max (C1: p95 < 3 s), max LLM calls (C2: <= 2),
-                        max citations (C3: <= 3)
+    3. Budgets          latency p50/p95/max (target p95 < 3 s), max LLM calls (limit 2),
+                        max citations (limit 3)
     4. Failure causes   each failed case gets ONE cause, in this order:
                         unsafe       leak or forbidden text
                         unavailable  LLM/retrieval failure -> "try again"
@@ -49,11 +49,11 @@ from pathlib import Path
 from fastapi.testclient import TestClient
 
 import app.main as main_module
-from app.config import get_settings
+from app.config import FALLBACK_MODEL, PRIMARY_MODEL, get_settings
 from app.embeddings import embed_query
-from app.ingest import ingest_all
-from app.llm import FakeLLM, build_llm
-from app.store import open_store
+from app.llm import FakeLLM, LLMError, build_llm
+from app.store import PolicyStore
+from app.versioning import ingest_all
 from eval.run_retrieval import CATEGORIES, QUESTIONS, RESULTS_DIR, load_questions, validate_gold
 
 LLM_CACHE = RESULTS_DIR / "llm_cache.jsonl"
@@ -66,8 +66,9 @@ class CachingLLM:
     costs no tokens. Errors are never cached. `hits` counts cached calls, so
     latency stats can exclude them (a cached call takes ~0 ms)."""
 
-    def __init__(self, llm, path: Path = LLM_CACHE):
+    def __init__(self, llm, path: Path = LLM_CACHE, cache_only: bool = False):
         self.llm, self.path, self.hits, self.provider = llm, path, 0, getattr(llm, "provider", "")
+        self.cache_only = cache_only     # never call the LLM: a cache miss counts as an outage
         self.store = {}
         if path.exists():
             for line in path.read_text().splitlines():
@@ -84,6 +85,8 @@ class CachingLLM:
         if k in self.store:
             self.hits += 1
             return self.store[k]
+        if self.cache_only:
+            raise LLMError("unavailable", f"{model}: not in the response cache (--cache-only)")
         raw = self.llm.complete_json(system, user, model, timeout_s)
         self.store[k] = raw
         with open(self.path, "a") as f:
@@ -132,11 +135,10 @@ def score(case: dict, http_status: int, body: dict, res) -> dict:
     if case["required"] and not retrieval_complete:
         notes.append(f"retrieval missed {[s for s in case['required'] if s not in retrieved]}")
     if res is not None:
-        if res.llm_calls == 2 and any(m.endswith("(rewrite)") for m in res.models):
-            if res.reason and res.reason != "ok":
-                notes.append(f"rewrite + answer ({res.reason})")
-        elif res.llm_calls == 2:
-            notes.append(f"fallback used ({res.reason})")
+        if FALLBACK_MODEL in res.models:
+            notes.append(f"fallback model used ({res.reason})")
+        elif res.reason and res.reason != "ok":
+            notes.append(res.reason)
         if res.reason.startswith("gate"):
             notes.append("stopped by gate (0 LLM calls)")
 
@@ -190,9 +192,14 @@ def summarise(rows: list[dict]) -> dict:
         groups["category"][r["expected"]["category"]].append(r)
         groups["company"][r["input"]["company"]].append(r)
     # Cached LLM responses take ~0 ms, so they'd flatter latency: measure only live calls.
-    live = [r for r in rows if not r["actual"].get("llm_cached")] or rows
+    live = [r for r in rows if not r["actual"].get("llm_cached")]
     lat = [r["actual"]["latency_ms"] for r in live]
     lat_llm = [r["actual"]["latency_ms"] for r in live if r["actual"]["llm_calls"] > 0]
+
+    def spread(values):
+        if not values:
+            return "not measured (every LLM response came from the cache)"
+        return {"p50": pct(values, .5), "p95": pct(values, .95), "max": round(max(values), 1)}
     calls = Counter(r["actual"]["llm_calls"] for r in rows)
     conf = Counter(f'{r["expected"]["status"]}->{r["actual"]["status"]}' for r in rows)
     complete = [r for r in rows if r["expected"]["status"] == "answered" and r["_retrieval_complete"]]
@@ -205,9 +212,8 @@ def summarise(rows: list[dict]) -> dict:
             "confident_wrong": conf.get("not_covered->answered", 0),
         },
         "budgets": {
-            "latency_ms_all": {"p50": pct(lat, .5), "p95": pct(lat, .95), "max": round(max(lat), 1)},
-            "latency_ms_with_llm": ({"p50": pct(lat_llm, .5), "p95": pct(lat_llm, .95),
-                                     "max": round(max(lat_llm), 1)} if lat_llm else {}),
+            "latency_ms_all": spread(lat),
+            "latency_ms_with_llm": spread(lat_llm),
             "llm_calls": {str(k): v for k, v in sorted(calls.items())},
             "max_llm_calls": max(calls),
             "max_citations": max(len(r["actual"]["citations"]) for r in rows),
@@ -234,9 +240,9 @@ def print_scorecard(s: dict, provider: str, models: list[str]) -> None:
           f"confidently wrong {sf['confident_wrong']}")
     print("3. Budgets")
     print(f"   latency, all questions : {b['latency_ms_all']}")
-    print(f"   latency, LLM-backed    : {b['latency_ms_with_llm']}   (C1: p95 < 3000 ms)")
-    print(f"   LLM calls per question : {b['llm_calls']}   max {b['max_llm_calls']} (C2: <= 2)")
-    print(f"   max citations          : {b['max_citations']} (C3: <= 3)")
+    print(f"   latency, LLM-backed    : {b['latency_ms_with_llm']}   (target: p95 < 3000 ms)")
+    print(f"   LLM calls per question : {b['llm_calls']}   max {b['max_llm_calls']} (limit 2)")
+    print(f"   max citations          : {b['max_citations']} (limit 3)")
     print(f"   latency measured on    : {b['latency_measured_on']}")
     print(f"4. Failure causes\n   {s['failure_causes']}")
     print(f"   status confusion (expected->actual): {s['status_confusion']}")
@@ -260,6 +266,8 @@ def main() -> None:
                     help="seconds to wait after each LLM-backed question: Groq's free tier allows 8K "
                          "tokens/min and a question with rewriting uses ~2.5K (2 calls)")
     ap.add_argument("--only", help="comma-separated case ids to run")
+    ap.add_argument("--cache-only", action="store_true",
+                    help="never call the LLM: replay cached responses only (a miss counts as 'unavailable')")
     ap.add_argument("--no-cache", action="store_true",
                     help="always call the LLM (default: reuse responses stored in eval/results/llm_cache.jsonl)")
     ap.add_argument("--max-unavailable-streak", type=int, default=5,
@@ -277,9 +285,9 @@ def main() -> None:
     llm = FakeLLM() if args.offline else build_llm(s)
     cache = None
     if not args.offline and not args.no_cache:
-        llm = cache = CachingLLM(llm)
+        llm = cache = CachingLLM(llm, cache_only=args.cache_only)
     provider = "fake" if args.offline else s.llm_provider
-    models = ["fake"] if provider == "fake" else [s.llm_model, s.llm_fallback_model]
+    models = ["fake"] if provider == "fake" else [PRIMARY_MODEL, FALLBACK_MODEL]
     pace = 0 if provider == "fake" else args.pace
 
     # Record the pipeline's internal result (calls, models, retrieved, reason) for each
@@ -294,7 +302,7 @@ def main() -> None:
     rows, started = [], time.time()
     try:
         with tempfile.TemporaryDirectory() as tmp:
-            store = open_store(Path(tmp))
+            store = PolicyStore(Path(tmp))
             ingest_all(store, s.policies_dir)
             embed_query("warm up")
             main_module.app.state.store, main_module.app.state.llm = store, llm
@@ -350,7 +358,7 @@ def main() -> None:
             f.write(json.dumps({k: v for k, v in r.items() if not k.startswith("_")}) + "\n")
     (RESULTS_DIR / f"e2e{suffix}_summary.json").write_text(json.dumps(
         {"generated_at": time.strftime("%Y-%m-%d %H:%M:%S"), "llm_provider": provider,
-         "models": models, "retrieval_mode": s.retrieval_mode,
+         "models": models,
          "run_seconds": round(time.time() - started), **summary}, indent=2))
 
     print_scorecard(summary, provider, models)

@@ -3,6 +3,8 @@ sections better than the question itself, and what does it cost?
 
     python -m eval.bench_rewrite               # uses cached rewrites when available
     python -m eval.bench_rewrite --refresh     # call the LLM again for every question
+    python -m eval.bench_rewrite --use-stored  # replay the stored rewrites, no LLM at all (also
+                                               # if the rewrite prompt changed since they were made)
     python -m eval.bench_rewrite --pace 5      # seconds between LLM calls (rate limits)
 
 Step 1 (LLM, once per question, cached in eval/results/rewrites.jsonl): the rewriter
@@ -29,12 +31,12 @@ import tempfile
 import time
 from pathlib import Path
 
-from app.config import get_settings
-from app.ingest import ingest_all
+from app.config import PRIMARY_MODEL, get_settings
 from app.llm import build_llm
-from app.retriever import retrieve
+from app.retriever import TOP_K, rank_query, retrieve, round_robin, rrf
 from app.rewriter import SYSTEM_PROMPT, rewrite_query
-from app.store import open_store
+from app.store import PolicyStore
+from app.versioning import ingest_all
 from eval.run_retrieval import CATEGORIES, RESULTS_DIR, load_questions, score_case, summarise, validate_gold
 
 CACHE = RESULTS_DIR / "rewrites.jsonl"
@@ -49,30 +51,50 @@ def prompt_key(model: str) -> str:
     return hashlib.sha256(f"{model}\n{SYSTEM_PROMPT}".encode()).hexdigest()[:12]
 
 
-def load_cache(key: str) -> dict:
+def load_cache(key: str | None) -> dict:
+    """Stored rewrites made with this exact model + prompt (key=None: all stored rewrites)."""
     if not CACHE.exists():
         return {}
     rows = [json.loads(line) for line in CACHE.read_text().splitlines() if line.strip()]
-    return {r["id"]: r for r in rows if r.get("key") == key}
+    return {r["id"]: r for r in rows if key is None or r.get("key") == key}
+
+
+def merged_top3(store, company: str, queries: list[str], fusion: str) -> list:
+    """Rank the company's chunks for each query (hybrid), then merge the rankings by
+    round-robin (each query's best first) or by RRF (agreement), and keep 3."""
+    rankings = [rank_query(store, company, None, q)[0] for q in queries]
+    if fusion == "round_robin":
+        return round_robin(rankings)[:TOP_K]
+    by_id = {c.id: c for ranking in rankings for c in ranking}
+    order = rrf([[c.id for c in ranking] for ranking in rankings])
+    return [by_id[i] for i in order[:TOP_K]]
 
 
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--refresh", action="store_true")
+    ap.add_argument("--use-stored", action="store_true")
     ap.add_argument("--pace", type=float, default=5.0)
     args = ap.parse_args()
 
     s = get_settings()
     cases = load_questions()
     validate_gold(cases, s.policies_dir)
-    llm, model = build_llm(s), s.llm_model
+    llm, model = build_llm(s), PRIMARY_MODEL
     key = prompt_key(model)
-    cache = {} if args.refresh else load_cache(key)
+    if args.use_stored:
+        cache = load_cache(None)
+        if len(cache) < 90:
+            raise SystemExit("--use-stored: eval/results/rewrites.jsonl does not hold all 90 rewrites")
+    elif args.refresh:
+        cache = {}
+    else:
+        cache = load_cache(key)
 
     with tempfile.TemporaryDirectory() as tmp:
-        store = open_store(Path(tmp))
+        store = PolicyStore(Path(tmp))
         ingest_all(store, s.policies_dir)
-        retrieve(store, "acme", "warm up")
+        retrieve(store, "acme", ["warm up"])
 
         # ---- step 1: rewrites (LLM) ----
         rewrites = {}
@@ -102,14 +124,14 @@ def main() -> None:
                 queries = rw["queries"] if rw["ok"] else []
                 t0 = time.perf_counter()
                 if include_original is None or not queries:
-                    r = retrieve(store, c["company"], c["question"])
+                    top = retrieve(store, c["company"], [c["question"]]).chunks
                 else:
-                    r = retrieve(store, c["company"], c["question"], rewrites=queries,
-                                 include_original=include_original, fusion=fusion)
+                    searched = [c["question"], *queries] if include_original else queries
+                    top = merged_top3(store, c["company"], searched, fusion)
                 retrieval_ms = (time.perf_counter() - t0) * 1000
                 rewrite_ms = 0.0 if include_original is None else rw["latency_ms"]
-                ranked = [ch.section for ch in r.chunks]
-                leaks = [ch.id for ch in r.chunks if ch.company_id != c["company"]]
+                ranked = [ch.section for ch in top]
+                leaks = [ch.id for ch in top if ch.company_id != c["company"]]
                 row = {"id": c["id"], "input": {"company": c["company"], "question": c["question"]},
                        "expected": {"required": c["required"], "category": c["category"]},
                        **score_case(c, ranked, leaks, retrieval_ms + rewrite_ms)}

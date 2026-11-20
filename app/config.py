@@ -1,10 +1,8 @@
-"""Settings, read from environment variables.
+"""Settings, read once from environment variables (and from .env if present).
 
-JWT secret rules (HLD §7.3):
-  1. If JWT_SECRET is set, use it - but refuse anything shorter than 32 characters.
-  2. If not set, generate a random one ONCE, save it to <DATA_DIR>/jwt_secret
-     (git-ignored, owner-only permissions) and reuse it on every restart.
-This keeps `docker compose up` working with zero setup, without a secret in git.
+Every setting has a working default, so `docker compose up` needs no setup:
+  * no GROQ_API_KEY  -> offline mode with a fake LLM
+  * no JWT_SECRET    -> a random secret is generated once and saved in the data folder
 """
 import logging
 import os
@@ -19,9 +17,15 @@ log = logging.getLogger("policy_assistant")
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
-# Read .env (git-ignored) into the environment. Real environment variables win,
-# so Docker / CI / tests can always override what's in the file.
+# Load .env into the environment. Variables that are already set win, so Docker
+# and tests can always override what's in the file.
 load_dotenv(PROJECT_ROOT / ".env", override=False)
+
+# The two LLMs (Groq free tier). The fallback is only used when the primary model
+# fails, so the service keeps answering if one model is down.
+PRIMARY_MODEL = "qwen/qwen3.8-27b"
+FALLBACK_MODEL = "openai/gpt-oss-120b"
+
 MIN_SECRET_LENGTH = 32
 
 
@@ -31,47 +35,52 @@ class ConfigError(RuntimeError):
 
 @dataclass(frozen=True)
 class Settings:
+    # identity
     jwt_secret: str
-    jwt_algorithm: str
     token_ttl_minutes: int
     employees_file: Path
+    # files
     data_dir: Path
     policies_dir: Path
-    retrieval_max_distance: float
-    retrieval_mode: str        # "vector" | "hybrid"
-    query_rewrite: bool        # LLM call 1 rewrites the question into search queries
-    llm_provider: str          # "groq" | "fake"
-    llm_model: str             # primary
-    llm_fallback_model: str    # used for the 2nd (and last) call
+    # LLM
+    llm_provider: str            # "groq" or "fake" (offline)
     llm_api_key: str
-    llm_timeout_s: float       # per call
-    answer_deadline_s: float   # whole /ask budget, kept under the 3 s p95 target
-    rewrite_timeout_s: float   # cap for the rewrite call, so the answer call keeps its time
-    retrieval_timeout_s: float # hard cap for one retrieval (embed + search); normal ~30-90 ms
-    request_timeout_s: float   # last-resort cap on a whole request (middleware backstop)
-    answer_cache_size: int     # repeated questions answered from memory; 0 disables
-    answer_cache_ttl_s: float  # safety net: cached answers expire after this
+    # retrieval: "not covered" when even the closest chunk is farther than this
+    retrieval_max_distance: float
+    # time limits, in seconds (a request must never hang)
+    retrieval_timeout_s: float   # one retrieval (embedding + search); normally ~30-90 ms
+    rewrite_timeout_s: float     # LLM call 1, so the answer call keeps its time
+    llm_timeout_s: float         # any single LLM call
+    answer_deadline_s: float     # the whole pipeline, kept under the 3 s target
+    request_timeout_s: float     # last-resort limit on a whole /ask request
+    # answer cache (0 entries = off)
+    answer_cache_size: int
+    answer_cache_ttl_s: float
 
 
-def _load_or_create_secret(data_dir: Path) -> str:
-    from_env = os.getenv("JWT_SECRET", "").strip()
-    if from_env:
-        if len(from_env) < MIN_SECRET_LENGTH:
+def _env(name: str, default: str) -> str:
+    return os.getenv(name, default).strip()
+
+
+def _jwt_secret(data_dir: Path) -> str:
+    """JWT_SECRET from the environment, or a secret generated once and saved to disk."""
+    secret = _env("JWT_SECRET", "")
+    if secret:
+        if len(secret) < MIN_SECRET_LENGTH:
             raise ConfigError(
-                f"JWT_SECRET is too short ({len(from_env)} chars); use at least "
-                f"{MIN_SECRET_LENGTH}. Generate one with: "
-                'python -c "import secrets; print(secrets.token_urlsafe(32))"'
-            )
-        return from_env
+                f"JWT_SECRET is too short ({len(secret)} chars); use at least {MIN_SECRET_LENGTH}. "
+                'Generate one with: python -c "import secrets; print(secrets.token_urlsafe(32))"')
+        return secret
 
     path = data_dir / "jwt_secret"
     if path.exists():
         return path.read_text().strip()
 
+    # First start without JWT_SECRET: create one. The file is readable only by its
+    # owner, and O_EXCL makes sure two processes starting together can't both create it.
     data_dir.mkdir(parents=True, exist_ok=True)
-    new_secret = secrets.token_urlsafe(32)  # 32 random bytes -> 43 URL-safe chars
+    new_secret = secrets.token_urlsafe(32)
     try:
-        # O_EXCL: if two processes start at once, only one creates the file.
         fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
     except FileExistsError:
         return path.read_text().strip()
@@ -81,72 +90,39 @@ def _load_or_create_secret(data_dir: Path) -> str:
     return new_secret
 
 
+def _llm_provider() -> tuple[str, str]:
+    """(provider, api key). Groq when a key is set, otherwise offline mode.
+    LLM_PROVIDER=fake forces offline mode even with a key (tests use this)."""
+    key = _env("GROQ_API_KEY", "")
+    provider = _env("LLM_PROVIDER", "").lower() or ("groq" if key else "fake")
+    if provider not in ("groq", "fake"):
+        raise ConfigError(f"LLM_PROVIDER must be 'groq' or 'fake', got {provider!r}")
+    if provider == "groq" and not key:
+        raise ConfigError("LLM_PROVIDER=groq needs GROQ_API_KEY")
+    return provider, key
+
+
 @lru_cache
 def get_settings() -> Settings:
     """Built once per process. Tests call get_settings.cache_clear() after changing env."""
-    data_dir = Path(os.getenv("DATA_DIR", PROJECT_ROOT / "data"))
+    data_dir = Path(_env("DATA_DIR", str(PROJECT_ROOT / "data")))
+    provider, api_key = _llm_provider()
     return Settings(
-        jwt_secret=_load_or_create_secret(data_dir),
-        jwt_algorithm="HS256",
-        token_ttl_minutes=int(os.getenv("TOKEN_TTL_MINUTES", "60")),
-        employees_file=Path(
-            os.getenv("EMPLOYEES_FILE", PROJECT_ROOT / "sample_data" / "employees.json")
-        ),
+        jwt_secret=_jwt_secret(data_dir),
+        token_ttl_minutes=int(_env("TOKEN_TTL_MINUTES", "60")),
+        employees_file=Path(_env("EMPLOYEES_FILE", str(PROJECT_ROOT / "sample_data" / "employees.json"))),
         data_dir=data_dir,
-        policies_dir=Path(os.getenv("POLICIES_DIR", PROJECT_ROOT / "policies")),
-        # Evidence gate: if even the best chunk is further than this (cosine distance),
-        # answer "not covered" without calling the LLM. Conservative on purpose: only
-        # clearly unrelated questions are cut here; borderline ones go to the LLM.
-        # 0.50 = the tightest value that blocks none of the 75 answerable gold questions
-        # with nomic-embed-text-v1.5 (worst real one: 0.489). See EVALUATION.md.
-        retrieval_max_distance=float(os.getenv("RETRIEVAL_MAX_DISTANCE", "0.50")),
-        # hybrid (default) = embeddings + stemmed BM25 keywords, fused with weighted RRF;
-        # vector = embeddings only. See EVALUATION.md.
-        retrieval_mode=_retrieval_mode(),
-        # on (default): call 1 rewrites the question (EVALUATION.md), call 2 answers;
-        # off: call 1 answers, call 2 is the fallback model.
-        query_rewrite=os.getenv("QUERY_REWRITE", "on").strip().lower() not in ("off", "0", "false", "no"),
-        **_llm_settings(),
+        policies_dir=Path(_env("POLICIES_DIR", str(PROJECT_ROOT / "policies"))),
+        llm_provider=provider,
+        llm_api_key=api_key,
+        # 0.50 is the tightest value that blocks none of the 75 answerable evaluation
+        # questions (the worst real one is 0.489). See EVALUATION.md.
+        retrieval_max_distance=float(_env("RETRIEVAL_MAX_DISTANCE", "0.50")),
+        retrieval_timeout_s=float(_env("RETRIEVAL_TIMEOUT_S", "1.0")),
+        rewrite_timeout_s=float(_env("REWRITE_TIMEOUT_S", "1.2")),
+        llm_timeout_s=float(_env("LLM_TIMEOUT_S", "2.0")),
+        answer_deadline_s=float(_env("ANSWER_DEADLINE_S", "2.8")),
+        request_timeout_s=float(_env("REQUEST_TIMEOUT_S", "3.0")),
+        answer_cache_size=int(_env("ANSWER_CACHE_SIZE", "1000")),
+        answer_cache_ttl_s=float(_env("ANSWER_CACHE_TTL_S", "21600")),
     )
-
-
-# Defaults chosen from a latency benchmark on Groq: Qwen was fastest and resisted the planted
-# injection; gpt-oss-120b is a different model with its own rate limits.
-LLM_DEFAULTS = {
-    "groq": ("qwen/qwen3.8-27b", "openai/gpt-oss-120b", "GROQ_API_KEY"),
-    "fake": ("fake-primary", "fake-fallback", ""),
-}
-
-
-def _retrieval_mode() -> str:
-    mode = os.getenv("RETRIEVAL_MODE", "hybrid").strip().lower()
-    if mode not in ("vector", "hybrid"):
-        raise ConfigError(f"RETRIEVAL_MODE must be 'vector' or 'hybrid', got {mode!r}")
-    return mode
-
-
-def _llm_settings() -> dict:
-    provider = os.getenv("LLM_PROVIDER", "").strip().lower()
-    if not provider:
-        # No explicit choice: use Groq if a key exists, otherwise offline mode.
-        provider = "groq" if os.getenv("GROQ_API_KEY", "").strip() else "fake"
-    if provider not in LLM_DEFAULTS:
-        raise ConfigError(f"LLM_PROVIDER must be one of {sorted(LLM_DEFAULTS)}, got {provider!r}")
-
-    model, fallback, key_var = LLM_DEFAULTS[provider]
-    key = os.getenv(key_var, "").strip() if key_var else ""
-    if provider != "fake" and not key:
-        raise ConfigError(f"LLM_PROVIDER={provider} needs {key_var} to be set")
-    return {
-        "llm_provider": provider,
-        "llm_model": os.getenv("LLM_MODEL", "").strip() or model,
-        "llm_fallback_model": os.getenv("LLM_FALLBACK_MODEL", "").strip() or fallback,
-        "llm_api_key": key,
-        "llm_timeout_s": float(os.getenv("LLM_TIMEOUT_S", "2.0")),
-        "answer_deadline_s": float(os.getenv("ANSWER_DEADLINE_S", "2.8")),
-        "rewrite_timeout_s": float(os.getenv("REWRITE_TIMEOUT_S", "1.2")),
-        "retrieval_timeout_s": float(os.getenv("RETRIEVAL_TIMEOUT_S", "1.0")),
-        "request_timeout_s": float(os.getenv("REQUEST_TIMEOUT_S", "3.0")),
-        "answer_cache_size": int(os.getenv("ANSWER_CACHE_SIZE", "1000")),
-        "answer_cache_ttl_s": float(os.getenv("ANSWER_CACHE_TTL_S", "21600")),
-    }

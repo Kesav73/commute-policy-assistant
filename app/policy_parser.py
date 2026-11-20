@@ -1,27 +1,35 @@
-"""Policy Markdown -> validated chunks. Pure Python: no database, no model.
+"""Turn a policy markdown file into chunks: one chunk per rule.
 
-Chunking strategy (HLD §5.2): structure-aware.
-  * one chunk per `### N.M` sub-section
-  * a `## N.` section with no sub-sections is one chunk on its own
-  * the chunk text starts with "Section title > Sub-section title" so the headings
-    help retrieval (the body of §4.1 never says "night" or "safety")
-  * no overlap: boundaries are the author's own headings, nothing is cut mid-rule
+Chunking is structure-aware:
+  * one chunk per "### N.M" sub-section (a "## N." section without sub-sections is one chunk)
+  * the chunk text starts with its headings, "Section > Sub-section", so the headings
+    help retrieval (the text of 4.1 itself never says "night" or "safety")
+  * nothing is cut in the middle of a rule, and a citation points to an exact section
 
-Anything unexpected raises PolicyParseError with the file name and line number.
-We never guess: a half-understood policy must not be served.
+Anything unexpected raises PolicyParseError with the file name and line number:
+a half-understood policy must never be served.
+
+Expected format:
+    ---
+    company_id: acme
+    doc_id: acme-transport-policy
+    title: Acme Corp Employee Transport Policy
+    effective_date: 2026-01-01
+    ---
+    ## 4. Night-Shift Safety
+    ### 4.1 Escort Requirement
+    For any drop scheduled after 8:00 PM, ...
 """
 import re
 from dataclasses import dataclass
 from pathlib import Path
 
 REQUIRED_FIELDS = ("company_id", "doc_id", "title")
-# One rule per chunk keeps each vector focused (and was the limit for the earlier MiniLM
-# model, which read only ~256 tokens).
-MAX_CHUNK_WORDS = 180
+MAX_CHUNK_WORDS = 180   # one rule per chunk keeps each embedding focused
 
-SECTION_RE = re.compile(r"^##\s+(\d+)\.\s+(\S.*)$")         # "## 4. Night-Shift Safety"
-SUBSECTION_RE = re.compile(r"^###\s+(\d+\.\d+)\s+(\S.*)$")   # "### 4.1 Escort Requirement"
-ID_RE = re.compile(r"^[a-z0-9][a-z0-9_-]*$")
+SECTION_RE = re.compile(r"^##\s+(\d+)\.\s+(\S.*)$")          # "## 4. Night-Shift Safety"
+SUBSECTION_RE = re.compile(r"^###\s+(\d+\.\d+)\s+(\S.*)$")    # "### 4.1 Escort Requirement"
+ID_RE = re.compile(r"^[a-z0-9][a-z0-9_-]*$")                  # "acme", "acme-transport-policy"
 
 
 class PolicyParseError(ValueError):
@@ -30,24 +38,14 @@ class PolicyParseError(ValueError):
 
 @dataclass(frozen=True)
 class Chunk:
-    id: str             # "acme-transport-policy:4.1"   (deterministic -> no duplicates)
+    id: str             # "acme-transport-policy:4.1"
     company_id: str     # "acme"
     doc_id: str         # "acme-transport-policy"
     title: str          # "Acme Corp Employee Transport Policy"
     section: str        # "4.1"
     section_title: str  # "Night-Shift Safety > Escort Requirement"
     body: str           # the rule text only
-    text: str           # what gets embedded: section_title + "\n" + body
-
-    def metadata(self) -> dict:
-        """What Chroma stores next to the vector (used for citations and the company check)."""
-        return {
-            "company_id": self.company_id,
-            "doc_id": self.doc_id,
-            "title": self.title,
-            "section": self.section,
-            "section_title": self.section_title,
-        }
+    text: str           # what gets embedded and shown to the LLM: section_title + "\n" + body
 
 
 @dataclass(frozen=True)
@@ -55,30 +53,45 @@ class Policy:
     company_id: str
     doc_id: str
     title: str
-    source: str
+    source: str              # file name, for error messages
     chunks: list[Chunk]
-    effective_date: str = ""   # from front matter, kept with the version (optional)
+    effective_date: str = ""
 
 
-# ------------------------------------------------------------ front matter --
+def parse_policy_file(path: Path) -> Policy:
+    return parse_policy(path.read_text(encoding="utf-8"), source=path.name)
 
-def _split_front_matter(raw: str, source: str) -> tuple[dict, list[str], int]:
-    """Return (fields, body_lines, line_number_of_first_body_line)."""
+
+def parse_policy(raw: str, source: str = "<policy>") -> Policy:
+    fields, body_lines, first_line_no = _read_front_matter(raw, source)
+    blocks = _split_into_blocks(body_lines, first_line_no, source)
+    chunks = _blocks_to_chunks(blocks, fields, source)
+    return Policy(company_id=fields["company_id"], doc_id=fields["doc_id"], title=fields["title"],
+                  source=source, chunks=chunks, effective_date=fields.get("effective_date", ""))
+
+
+def _read_front_matter(raw: str, source: str) -> tuple[dict, list[str], int]:
+    """The "key: value" lines between the two '---' lines. Returns (fields, the
+    remaining lines, the line number of the first remaining line)."""
     lines = raw.splitlines()
     if not lines or lines[0].strip() != "---":
         raise PolicyParseError(f"{source}: must start with a '---' front-matter block")
-    try:
-        end = next(i for i in range(1, len(lines)) if lines[i].strip() == "---")
-    except StopIteration:
+    end = None
+    for i in range(1, len(lines)):
+        if lines[i].strip() == "---":
+            end = i
+            break
+    if end is None:
         raise PolicyParseError(f"{source}: front-matter block is not closed with '---'")
 
-    fields: dict[str, str] = {}
-    for n, line in enumerate(lines[1:end], start=2):
+    fields = {}
+    for line_no in range(2, end + 1):
+        line = lines[line_no - 1]
         if not line.strip():
             continue
-        key, sep, value = line.partition(":")
-        if not sep or not key.strip():
-            raise PolicyParseError(f"{source}:{n}: expected 'key: value', got {line!r}")
+        key, colon, value = line.partition(":")
+        if not colon or not key.strip():
+            raise PolicyParseError(f"{source}:{line_no}: expected 'key: value', got {line!r}")
         fields[key.strip()] = value.strip()
 
     missing = [f for f in REQUIRED_FIELDS if not fields.get(f)]
@@ -87,77 +100,82 @@ def _split_front_matter(raw: str, source: str) -> tuple[dict, list[str], int]:
     for f in ("company_id", "doc_id"):
         if not ID_RE.match(fields[f]):
             raise PolicyParseError(f"{source}: {f} {fields[f]!r} must be lowercase letters, digits, '-' or '_'")
-
     return fields, lines[end + 1:], end + 2
 
 
-# ------------------------------------------------------------------ body --
+def _split_into_blocks(lines: list[str], first_line_no: int, source: str) -> list[dict]:
+    """Walk the lines once and group them under their heading. Each block is
+    {"section", "num", "sub_title", "line", "body"}; "section" is the enclosing
+    "## N." heading, "sub_title" is None for that heading's own block."""
+    blocks = []
+    section = None    # the current "## N." heading
+    current = None    # the block that receives text lines
 
-def parse_policy(raw: str, source: str = "<policy>") -> Policy:
-    fields, body_lines, first_line_no = _split_front_matter(raw, source)
-    company_id, doc_id, title = fields["company_id"], fields["doc_id"], fields["title"]
+    for line_no, line in enumerate(lines, start=first_line_no):
+        section_match = SECTION_RE.match(line)
+        sub_match = SUBSECTION_RE.match(line)
 
-    # Walk the lines once, collecting (section, sub-section, body lines) blocks.
-    blocks: list[dict] = []
-    section: dict | None = None      # current "## N." heading
-    current: dict | None = None      # block receiving body lines
-
-    for n, line in enumerate(body_lines, start=first_line_no):
-        if m := SECTION_RE.match(line):
-            section = {"num": m.group(1), "title": m.group(2).strip(), "line": n, "has_sub": False}
-            current = {"section": section, "num": section["num"], "sub_title": None, "line": n, "body": []}
+        if section_match:
+            section = {"num": section_match.group(1), "title": section_match.group(2).strip(),
+                       "has_sub": False}
+            current = {"section": section, "num": section["num"], "sub_title": None,
+                       "line": line_no, "body": []}
             blocks.append(current)
-        elif m := SUBSECTION_RE.match(line):
+        elif sub_match:
+            num = sub_match.group(1)
             if section is None:
-                raise PolicyParseError(f"{source}:{n}: sub-section before any '## N.' section")
-            num = m.group(1)
+                raise PolicyParseError(f"{source}:{line_no}: sub-section before any '## N.' section")
             if num.split(".")[0] != section["num"]:
-                raise PolicyParseError(
-                    f"{source}:{n}: sub-section {num} is inside section {section['num']}")
+                raise PolicyParseError(f"{source}:{line_no}: sub-section {num} is inside section {section['num']}")
             section["has_sub"] = True
-            current = {"section": section, "num": num, "sub_title": m.group(2).strip(), "line": n, "body": []}
+            current = {"section": section, "num": num, "sub_title": sub_match.group(2).strip(),
+                       "line": line_no, "body": []}
             blocks.append(current)
         elif line.startswith("#"):
             raise PolicyParseError(
-                f"{source}:{n}: unrecognised heading {line!r} (use '## N. Title' or '### N.M Title')")
+                f"{source}:{line_no}: unrecognised heading {line!r} (use '## N. Title' or '### N.M Title')")
         elif line.strip():
             if current is None:
-                raise PolicyParseError(f"{source}:{n}: text before the first '## N.' section")
+                raise PolicyParseError(f"{source}:{line_no}: text before the first '## N.' section")
             current["body"].append(line.strip())
+    return blocks
 
-    chunks: list[Chunk] = []
-    seen: set[str] = set()
-    for b in blocks:
-        sec = b["section"]
-        is_section_block = b["sub_title"] is None
-        body = " ".join(b["body"])
 
-        if is_section_block and sec["has_sub"]:
-            # A "## N." heading that has sub-sections is only a container.
+def _blocks_to_chunks(blocks: list[dict], fields: dict, source: str) -> list[Chunk]:
+    chunks = []
+    seen_numbers = set()
+    for block in blocks:
+        section = block["section"]
+        is_section_heading = block["sub_title"] is None
+        body = " ".join(block["body"])
+        where = f"{source}:{block['line']}"
+
+        # A "## N." heading that has sub-sections is only a container: no chunk.
+        if is_section_heading and section["has_sub"]:
             if body:
-                raise PolicyParseError(
-                    f"{source}:{b['line']}: section {sec['num']} has text before its first sub-section")
+                raise PolicyParseError(f"{where}: section {section['num']} has text before its first sub-section")
             continue
 
         if not body:
-            raise PolicyParseError(f"{source}:{b['line']}: section {b['num']} is empty")
-        if b["num"] in seen:
-            raise PolicyParseError(f"{source}:{b['line']}: duplicate section number {b['num']}")
-        seen.add(b["num"])
-
+            raise PolicyParseError(f"{where}: section {block['num']} is empty")
+        if block["num"] in seen_numbers:
+            raise PolicyParseError(f"{where}: duplicate section number {block['num']}")
+        seen_numbers.add(block["num"])
         words = len(body.split())
         if words > MAX_CHUNK_WORDS:
-            raise PolicyParseError(
-                f"{source}:{b['line']}: section {b['num']} has {words} words "
-                f"(max {MAX_CHUNK_WORDS}); split it into sub-sections")
+            raise PolicyParseError(f"{where}: section {block['num']} has {words} words "
+                                   f"(max {MAX_CHUNK_WORDS}); split it into sub-sections")
 
-        section_title = sec["title"] if is_section_block else f"{sec['title']} > {b['sub_title']}"
+        if is_section_heading:
+            section_title = section["title"]
+        else:
+            section_title = f"{section['title']} > {block['sub_title']}"
         chunks.append(Chunk(
-            id=f"{doc_id}:{b['num']}",
-            company_id=company_id,
-            doc_id=doc_id,
-            title=title,
-            section=b["num"],
+            id=f"{fields['doc_id']}:{block['num']}",
+            company_id=fields["company_id"],
+            doc_id=fields["doc_id"],
+            title=fields["title"],
+            section=block["num"],
             section_title=section_title,
             body=body,
             text=f"{section_title}\n{body}",
@@ -165,10 +183,4 @@ def parse_policy(raw: str, source: str = "<policy>") -> Policy:
 
     if not chunks:
         raise PolicyParseError(f"{source}: no sections found")
-
-    return Policy(company_id=company_id, doc_id=doc_id, title=title, source=source, chunks=chunks,
-                  effective_date=str(fields.get("effective_date", "")))
-
-
-def parse_policy_file(path: Path) -> Policy:
-    return parse_policy(path.read_text(encoding="utf-8"), source=path.name)
+    return chunks

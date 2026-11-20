@@ -1,10 +1,10 @@
 """JWT: a mock issuer and a real verifier.
 
-ISSUE  (simulated - stands in for the company's SSO):
-    employee_id -> look up company/role in the directory -> sign a token.
-VERIFY (the real requirement, PS.md R4/R5):
-    every protected endpoint gets the caller's identity ONLY via current_principal(),
-    which trusts nothing but a token signed with our secret.
+ISSUE (a stand-in for the company's SSO): employee_id -> look up company and role in
+    the mock HR directory (sample_data/employees.json) -> sign a token (HS256, 60 min).
+VERIFY (the real part): every protected endpoint learns who is calling ONLY through
+    current_principal(), which trusts nothing but a valid token signed with our secret.
+    The company always comes from the token, never from the request.
 """
 import json
 import time
@@ -19,6 +19,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from app.config import get_settings
 
 ROLES = ("employee", "admin")
+ALGORITHM = "HS256"   # pinned: tokens using any other algorithm (incl. "none") are rejected
 REQUIRED_CLAIMS = ["sub", "company_id", "role", "iat", "exp"]
 
 
@@ -68,7 +69,7 @@ def issue_token(employee_id: str) -> tuple[str, int]:
         "iat": now,
         "exp": now + ttl,
     }
-    return jwt.encode(claims, s.jwt_secret, algorithm=s.jwt_algorithm), ttl
+    return jwt.encode(claims, s.jwt_secret, algorithm=ALGORITHM), ttl
 
 
 # ------------------------------------------------------------------ verify --
@@ -88,7 +89,7 @@ def decode_token(token: str) -> Principal:
         claims = jwt.decode(
             token,
             s.jwt_secret,
-            algorithms=[s.jwt_algorithm],  # pinned: blocks "alg: none" and algorithm swaps
+            algorithms=[ALGORITHM],
             options={"require": REQUIRED_CLAIMS},
         )
     except jwt.ExpiredSignatureError:
@@ -119,7 +120,7 @@ def current_principal(
 
 
 def require_admin(principal: Principal = Depends(current_principal)) -> Principal:
-    """For admin-only endpoints (policy upload, later)."""
+    """For admin-only endpoints (policy upload)."""
     if principal.role != "admin":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,

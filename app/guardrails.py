@@ -1,20 +1,18 @@
-"""Deterministic guardrails: plain code, no LLM calls.
+"""Guardrails in plain code (no LLM calls). These have the final word, because model
+output is untrusted: a model that was talked into something can't be its own judge.
 
-The LLM guards live inside the two calls we already make (the rewriter judges the
-question, the answerer may refuse). These code checks are the backstop that has
-the final word, because "treat model output as untrusted" (PS.md) means a model
-that was talked into something can't also be the only judge of it.
+    on chunks  is_instruction_like()      at publish time: text that gives orders to an
+                                          AI is never indexed (e.g. Crest section 7)
+    on output  echoed_injection()         the answer repeats what injected text wanted said
+               mentions_other_company()   an Acme answer must never name "Bolt" or "Crest"
 
-    chunks  is_instruction_like()   at ingest: text that gives orders to an AI is
-                                    never indexed (e.g. Crest section 7)
-    output  echoed_injection()      the answer repeats what injected text wanted said
-            other_company_terms()   names/doc ids of the OTHER companies; an answer
-            mentions_other_company()   for Acme must never contain "Bolt" or "Crest"
+The LLM-side guards ride on the two calls we already make: the rewrite call judges
+the question, and the answer call may refuse ("blocked").
 
-Deliberately NOT here: matching every number/time in the answer against the
-excerpts. Measured (EVALUATION.md): facts were right in 63/66 answers with full
-retrieval and none were invented, so a strict matcher would mostly add false
-blocks ("8 PM" vs "8:00 PM"). See EVALUATION.md.
+Deliberately not done: matching every number and time in the answer against the
+excerpts. With complete retrieval the facts were right in 63 of 66 answers and none
+were invented, so a strict matcher would mostly block correct answers
+("8 PM" vs "8:00 PM").
 """
 import re
 
@@ -61,21 +59,21 @@ def other_company_terms(store: PolicyStore, own_company: str, companies: list[st
     each other company's doc id, document title and short name (first word of the
     title, e.g. "Bolt"), read from that company's chunk store."""
     terms = set()
-    for co in companies:
-        if co == own_company:
+    for company in companies:
+        if company == own_company:
             continue
-        chunks = store.chunks.all(co)
+        chunks = list(store.chunks(company).values())
         if not chunks:
             continue
-        c = next(iter(chunks.values()))
-        terms.update({c.doc_id, c.title, c.title.split()[0]})
-    return sorted(terms, key=len, reverse=True)
+        first = chunks[0]
+        terms.update({first.doc_id, first.title, first.title.split()[0]})
+    return sorted(terms, key=len, reverse=True)   # longest first: "Bolt Technologies ..." before "Bolt"
 
 
 def mentions_other_company(answer: str, terms: list[str]) -> str | None:
     """The first other-company term found as a whole word (case-sensitive), or None.
     Case-sensitive so that the ordinary word "bolt" can't trigger it; only "Bolt"."""
-    for t in terms:
-        if re.search(rf"(?<![\w-]){re.escape(t)}(?![\w-])", answer):
-            return t
+    for term in terms:
+        if re.search(rf"(?<![\w-]){re.escape(term)}(?![\w-])", answer):
+            return term
     return None

@@ -1,29 +1,30 @@
-"""Retrieval: question -> embedding -> top-k chunks from the CALLER'S company only.
+"""Retrieval: search queries -> the 3 best chunks from the CALLER'S company only.
 
-    company_id (from the verified token, never from the request)
-        -> open ONLY collection policy__<company_id>   (ids + vectors)
-        -> embed the question with the same model used at ingest
-        -> rank the chunks by cosine distance (vector) and, in hybrid mode, also by
-           BM25 keywords, fused with weighted RRF; keep the best k
-        -> look each id up in THIS company's chunk store (text + metadata);
-           an id it doesn't hold is dropped and logged (defence in depth)
-        -> evidence gate: is the best match close enough to bother the LLM?
+For each search query (the rewritten queries, or the original question):
+  1. vector search:  embed "search_query: <query>", rank every chunk of the company's
+                     collection by cosine distance (0 = same meaning)
+  2. keyword search: rank the same chunks with BM25 (stemmed words, rare words count more)
+  3. fuse the two rankings with weighted Reciprocal Rank Fusion (vectors count double)
+Then merge the queries' rankings ROUND-ROBIN (each query's best chunk first) and keep 3.
 
-Try it:  python -m app.retriever acme "Can I book a cab on Saturday?"
+Isolation: only that company's collection is opened, and every id it returns must exist
+in that company's chunk file; anything else is dropped and logged as an alert.
 """
 import logging
-import sys
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
-from app.config import get_settings
 from app.bm25 import BM25Index
+from app.config import get_settings
 from app.embeddings import EMBEDDING_ID, embed_query
-from app.store import PolicyStore, StoreError, get_company_collection, open_store
+from app.store import PolicyStore, StoreError
 
 log = logging.getLogger("policy_assistant")
 
-TOP_K = 3  # PS.md C3: never more than 3 chunks reach the LLM / the answer
+TOP_K = 3              # chunks given to the LLM; also the most it can cite
+RRF_K = 60             # standard constant from the RRF paper (Cormack et al., 2009)
+VECTOR_WEIGHT = 2.0    # vectors are the stronger search alone (recall@3 0.89 vs 0.84),
+KEYWORD_WEIGHT = 1.0   # so keywords add what vectors miss rather than overrule them
 
 
 @dataclass(frozen=True)
@@ -35,253 +36,136 @@ class RetrievedChunk:
     section: str
     section_title: str
     text: str
-    distance: float  # cosine distance: 0 = same meaning, larger = less related
+    distance: float   # cosine distance of the vector match: 0 = same meaning
 
 
 @dataclass
 class RetrievalResult:
-    company_id: str
-    question: str
-    chunks: list[RetrievedChunk]          # best first, at most TOP_K
-    has_evidence: bool                     # best distance <= max_distance
-    max_distance: float
-    timings_ms: dict = field(default_factory=dict)
-    best_distance: float | None = None     # closest vector match (what the gate uses)
+    chunks: list[RetrievedChunk]      # best first, at most TOP_K
+    best_distance: float | None       # closest vector match of any query (used by the gate)
+    has_evidence: bool                # best_distance <= the "not covered" threshold
+    timings_ms: dict
 
 
-@dataclass
-class Candidates:
-    """Every candidate chunk of ONE company, best first, before the top-k cut."""
-    chunks: list[RetrievedChunk]
-    best_distance: float | None            # closest vector match (what the gate uses)
-    timings_ms: dict = field(default_factory=dict)
-
-
-def rank_candidates(
-    store: PolicyStore,
-    company_id: str,
-    question: str,
-    mode: str | None = None,          # "vector" | "hybrid"; default from settings
-    pool: int | None = None,          # how many to rank; None = all of the company's chunks
-    version: int | None = None,       # policy version; None = the ACTIVE one (requests pin it)
-) -> Candidates | None:
-    """Rank the company's chunks for the question. None if the company has no policy."""
-    if version is None:
-        version = store.active_version(company_id)
-    collection = get_company_collection(store, company_id, version)
-    if collection is None or collection.count() == 0:
-        return None   # no policy for this company: nothing to search, nothing to leak
-    if (collection.metadata or {}).get("embedding") != EMBEDDING_ID:
-        # Vectors made by a different model/prefix would be compared with this
-        # question's vector: results would be quietly wrong. Fail loudly instead
-        # (the pipeline turns this into "try again"; a re-ingest fixes it).
-        raise StoreError(f"{collection.name} was built with {(collection.metadata or {}).get('embedding')!r}, "
-                         f"expected {EMBEDDING_ID!r}; re-ingest needed")
-
-    mode = mode or get_settings().retrieval_mode
-    n = collection.count()
-    # Hybrid ranks EVERY chunk of the company (<= ~30) by both methods, then fuses.
-    n_results = n if (mode == "hybrid" or pool is None) else min(pool, n)
-
-    t0 = time.perf_counter()
-    query_vector = embed_query(question)   # same model + matching prefix as ingest
-    t1 = time.perf_counter()
-    raw = collection.query(
-        query_embeddings=query_vector,
-        n_results=n_results,
-        include=["distances"],   # ids come back always; content comes from the chunk store
-    )
-    t2 = time.perf_counter()
-    # Defence in depth (HLD §7.1 layer 3): EVERY candidate id must be one of this
-    # company's chunks, checked before any ranking or fusion, so a foreign id is
-    # caught (and logged) even when it would not make the final top k.
-    # With one collection per company this should never fire.
-    own = store.chunks.all(company_id, version)
-    distance, vector_order = {}, []
-    for cid, dist in zip(raw["ids"][0], raw["distances"][0]):   # best first
-        c = own.get(cid)
-        if c is None or c.company_id != company_id:
-            log.error("ISOLATION ALERT: id %s in %s's collection is not one of %s's chunks",
-                      cid, company_id, company_id)
-            continue
-        distance[cid] = dist
-        vector_order.append(cid)
-    timings = {"embed": round((t1 - t0) * 1000, 1), "search": round((t2 - t1) * 1000, 1)}
-
-    if mode == "hybrid":
-        keyword = _bm25(store, company_id, version).scores(question)
-        keyword_order = sorted(keyword, key=lambda i: -keyword[i])
-        order = rrf([vector_order, keyword_order], weights=[VECTOR_WEIGHT, KEYWORD_WEIGHT])
-        timings["keyword"] = round((time.perf_counter() - t2) * 1000, 1)
-    else:
-        order = vector_order
-    if pool is not None:
-        order = order[:pool]
-
-    chunks = []
-    for cid in order:
-        c = own[cid]          # every id in `order` was validated above (BM25 is built from `own`)
-        chunks.append(RetrievedChunk(
-            id=c.id, company_id=c.company_id, doc_id=c.doc_id, title=c.title,
-            section=c.section, section_title=c.section_title,
-            text=c.text, distance=float(distance.get(cid, 1.0)),
-        ))
-    return Candidates(chunks, min(distance.values(), default=None), timings)
-
-
-def retrieve(
-    store: PolicyStore,
-    company_id: str,
-    question: str,
-    k: int = TOP_K,
-    max_distance: float | None = None,
-    mode: str | None = None,          # "vector" | "hybrid"; default from settings
-    rewrites: list[str] | None = None,  # search queries from the query rewriter
-    include_original: bool = True,      # also search with the original question
-    version: int | None = None,         # policy version to use; None = active (requests pin it)
-    fusion: str = "rrf",                # how rankings of several queries are merged:
-                                        #   "rrf" (agreement) | "round_robin" (coverage)
-) -> RetrievalResult:
-    k = max(1, min(k, TOP_K))
+def retrieve(store: PolicyStore, company_id: str, queries: list[str],
+             version: int | None = None, max_distance: float | None = None) -> RetrievalResult:
+    """The 3 best chunks for these queries, from one company's policy version
+    (default: the live one). With several queries, each one's best chunk comes first."""
     if max_distance is None:
         max_distance = get_settings().retrieval_max_distance
-
-    if rewrites:
-        return _retrieve_multi(store, company_id, question, rewrites, k, max_distance, mode,
-                               include_original, fusion, version)
-    cand = rank_candidates(store, company_id, question, mode=mode, pool=k, version=version)
-    if cand is None:
-        return RetrievalResult(company_id, question, [], False, max_distance)
-
-    # The gate always uses the closest VECTOR match, whatever the final order:
-    # "is anything in this policy about this question at all?"
-    best = cand.best_distance
-    has_evidence = best is not None and best <= max_distance
-    return RetrievalResult(
-        company_id=company_id, question=question, chunks=cand.chunks[:k],
-        has_evidence=has_evidence, max_distance=max_distance,
-        timings_ms=cand.timings_ms, best_distance=best,
-    )
-
-
-def _retrieve_multi(store, company_id, question, rewrites, k, max_distance, mode, include_original,
-                    fusion="rrf", version=None):
-    """Search with the rewritten queries (and, if include_original, the original
-    question too); fuse all rankings with RRF and keep the top k.
-
-    include_original=False (what the app uses): only the rewrites decide the chunks.
-    include_original=True: the original question is one more ranking.
-    The gate uses the best distance any searched query reached.
-    """
-    t0 = time.perf_counter()
     if version is None:
-        version = store.active_version(company_id)   # one version for every query
-    queries = [question, *rewrites] if include_original else list(rewrites)
-    ranked = [rank_candidates(store, company_id, q, mode=mode, pool=None, version=version)
-              for q in queries]
-    if any(c is None for c in ranked):
-        return RetrievalResult(company_id, question, [], False, max_distance)
-    by_id = {c.id: c for cand in ranked for c in cand.chunks}
-    rankings = [[c.id for c in cand.chunks] for cand in ranked]
-    order = round_robin(rankings) if fusion == "round_robin" else rrf(rankings)
-    # Gate signal: the closest match any searched query found. (Off-topic questions
-    # are stopped earlier by the rewriter's verdict; this catches what slips past.)
-    best = min((c.best_distance for c in ranked if c.best_distance is not None), default=None)
+        version = store.active_version(company_id)
+    started = time.perf_counter()
+
+    rankings, best = [], None
+    for query in queries:
+        ranked, query_best = rank_query(store, company_id, version, query)
+        rankings.append(ranked)
+        if query_best is not None and (best is None or query_best < best):
+            best = query_best
+
+    top = round_robin(rankings)[:TOP_K]
     return RetrievalResult(
-        company_id=company_id, question=question, chunks=[by_id[i] for i in order[:k]],
-        has_evidence=best is not None and best <= max_distance, max_distance=max_distance,
-        timings_ms={"multi_query": round((time.perf_counter() - t0) * 1000, 1),
-                    "queries": len(ranked)},
+        chunks=top,
         best_distance=best,
+        has_evidence=best is not None and best <= max_distance,
+        timings_ms={"retrieve": round((time.perf_counter() - started) * 1000, 1), "queries": len(queries)},
     )
+
+
+def rank_query(store: PolicyStore, company_id: str, version: int | None, query: str):
+    """Hybrid ranking of ALL the company's chunks for one query.
+    Returns (chunks best first, closest vector distance)."""
+    vector_ids, distances = vector_search(store, company_id, version, query)
+    if not vector_ids:
+        return [], None
+    keyword_ids = keyword_ranking(store, company_id, version, query)
+    order = rrf([vector_ids, keyword_ids], weights=[VECTOR_WEIGHT, KEYWORD_WEIGHT])
+
+    chunks = store.chunks(company_id, version)
+    ranked = []
+    for chunk_id in order:
+        c = chunks[chunk_id]
+        ranked.append(RetrievedChunk(id=c.id, company_id=c.company_id, doc_id=c.doc_id, title=c.title,
+                                     section=c.section, section_title=c.section_title, text=c.text,
+                                     distance=float(distances.get(chunk_id, 1.0))))
+    return ranked, min(distances.values())
+
+
+def vector_search(store: PolicyStore, company_id: str, version: int | None, query: str):
+    """Every chunk of the company, ranked by cosine distance to the query.
+    Returns (ids best first, {id: distance}). Empty if the company has no policy."""
+    collection = store.collection(company_id, version)
+    if collection is None or collection.count() == 0:
+        return [], {}
+    if (collection.metadata or {}).get("embedding") != EMBEDDING_ID:
+        # Vectors from another model would be compared with this question's vector and
+        # give quietly wrong results. Fail loudly instead ("try again"; a republish fixes it).
+        raise StoreError(f"{collection.name} was built with a different embedding model")
+
+    raw = collection.query(query_embeddings=embed_query(query), n_results=collection.count(),
+                           include=["distances"])
+    own_chunks = store.chunks(company_id, version)
+    ids, distances = [], {}
+    for chunk_id, distance in zip(raw["ids"][0], raw["distances"][0]):
+        chunk = own_chunks.get(chunk_id)
+        if chunk is None or chunk.company_id != company_id:
+            # Should never happen with one collection per company: drop it, and say so loudly.
+            log.error("ISOLATION ALERT: id %s in %s's collection is not one of its chunks", chunk_id, company_id)
+            continue
+        ids.append(chunk_id)
+        distances[chunk_id] = distance
+    return ids, distances
+
+
+_bm25_indexes = {}   # (company, version) -> BM25Index, built on first use
+
+
+def keyword_ranking(store: PolicyStore, company_id: str, version: int | None, query: str) -> list[str]:
+    """Every chunk id of the company, ranked by BM25 keyword score (best first)."""
+    chunks = store.chunks(company_id, version)
+    key = (company_id, version)
+    if key not in _bm25_indexes or _bm25_indexes[key].ids != list(chunks):
+        _bm25_indexes[key] = BM25Index(list(chunks), [c.text for c in chunks.values()], stem=True)
+    scores = _bm25_indexes[key].scores(query)
+    return sorted(scores, key=scores.get, reverse=True)
+
+
+def rrf(rankings: list[list[str]], weights: list[float] | None = None) -> list[str]:
+    """Weighted Reciprocal Rank Fusion: score(id) = sum of weight / (60 + rank).
+    Uses only ranks, so a cosine distance and a BM25 score never have to be compared."""
+    if weights is None:
+        weights = [1.0] * len(rankings)
+    score = {}
+    for ranking, weight in zip(rankings, weights):
+        for rank, item in enumerate(ranking, start=1):
+            score[item] = score.get(item, 0.0) + weight / (RRF_K + rank)
+    return sorted(score, key=score.get, reverse=True)
+
+
+def round_robin(rankings: list[list]) -> list:
+    """Take the best not-yet-chosen item of ranking 1, then of ranking 2, ... and repeat.
+    For a split-up question each sub-query looks for a different rule, so each one's
+    top hit gets a place (RRF would favour items the sub-queries happen to share)."""
+    merged, seen = [], set()
+    longest = max((len(r) for r in rankings), default=0)
+    for depth in range(longest):
+        for ranking in rankings:
+            if depth < len(ranking):
+                item = ranking[depth]
+                key = getattr(item, "id", item)   # works for chunks and for plain ids
+                if key not in seen:
+                    seen.add(key)
+                    merged.append(item)
+    return merged
 
 
 def warm_up(store: PolicyStore) -> dict[str, float]:
-    """Run one retrieval per company at startup, BEFORE requests are accepted.
-
-    Loads the embedding model (~1-2 s the first time), opens every active collection
-    and builds the BM25 indexes. Without this, the first question after a restart
-    pays that cost inside retrieval and hits the 1 s retrieval limit ("try again").
-    Returns {company: ms} for the startup log."""
-    out = {}
-    for co in store.active_companies():
-        t0 = time.perf_counter()
-        retrieve(store, co, "warm up")
-        out[co] = round((time.perf_counter() - t0) * 1000, 1)
-    return out
-
-
-# --------------------------------------------------------------- hybrid --
-
-RRF_K = 60  # standard constant from the RRF paper (Cormack et al., 2009)
-# Vectors get twice the vote of keywords: alone, vectors are the stronger ranker
-# (recall@3 0.89 vs 0.84 for stemmed BM25), so keywords should mainly add what
-# vectors miss rather than overrule them. Measured in EVALUATION.md.
-VECTOR_WEIGHT = 2.0
-KEYWORD_WEIGHT = 1.0
-STEM = True  # "booking"/"booked"/"book" match each other (BM25 alone: 51 -> 59 of 75)
-
-
-def rrf(rankings: list[list[str]], weights: list[float] | None = None, k: int = RRF_K) -> list[str]:
-    """Weighted Reciprocal Rank Fusion: score(id) = sum of weight / (k + rank).
-
-    Uses only ranks, not raw scores, so cosine distances and BM25 scores (which
-    live on unrelated scales) never have to be compared or normalised.
-    """
-    weights = weights or [1.0] * len(rankings)
-    score: dict[str, float] = {}
-    for ranking, w in zip(rankings, weights):
-        for rank, cid in enumerate(ranking, start=1):
-            score[cid] = score.get(cid, 0.0) + w / (k + rank)
-    return sorted(score, key=lambda i: -score[i])
-
-
-def round_robin(rankings: list[list[str]]) -> list[str]:
-    """Take the best not-yet-chosen id of ranking 1, then ranking 2, ... and repeat.
-
-    For DECOMPOSED queries each sub-query targets a different rule, so each one's
-    top hit deserves a slot (coverage). RRF instead rewards ids that several
-    rankings agree on, which crowds out a section only one sub-query finds.
-    """
-    out, seen, depth = [], set(), 0
-    while any(depth < len(r) for r in rankings):
-        for r in rankings:
-            if depth < len(r) and r[depth] not in seen:
-                seen.add(r[depth])
-                out.append(r[depth])
-        depth += 1
-    return out
-
-
-_BM25_CACHE: dict[tuple[str, int | None], tuple[int, BM25Index]] = {}
-
-
-def _bm25(store: PolicyStore, company_id: str, version: int | None = None) -> BM25Index:
-    """Per-company, per-version BM25 index built from the chunk store; rebuilt when its chunks change."""
-    chunks = store.chunks.all(company_id, version)
-    key = (company_id, version)
-    cached = _BM25_CACHE.get(key)
-    if cached is None or cached[0] != id(chunks):
-        cached = (id(chunks), BM25Index(list(chunks), [c.text for c in chunks.values()], stem=STEM))
-        _BM25_CACHE[key] = cached
-    return cached[1]
-
-
-def main() -> None:
-    if len(sys.argv) != 3:
-        sys.exit('usage: python -m app.retriever <company_id> "<question>"')
-    company_id, question = sys.argv[1], sys.argv[2]
-    embed_query("warm up")  # load the model first, so the timing below is per-question
-    r = retrieve(open_store(get_settings().data_dir), company_id, question)
-    best = f"{r.best_distance:.3f}" if r.chunks else "-"
-    print(f"\n{company_id}: {question!r}")
-    print(f"evidence: {'YES' if r.has_evidence else 'NO -> not covered'} "
-          f"(best distance {best}, gate <= {r.max_distance})   timings {r.timings_ms}\n")
-    for i, c in enumerate(r.chunks, 1):
-        body = c.text.split("\n", 1)[1]
-        print(f"  {i}. §{c.section:<4} {c.distance:.3f}  {c.section_title}")
-        print(f"     {body[:110]}{'...' if len(body) > 110 else ''}")
-
-
-if __name__ == "__main__":
-    main()
+    """One retrieval per company at startup, before requests are accepted: loads the
+    embedding model (~1 s) and builds the indexes, so the first question isn't slow."""
+    took = {}
+    for company_id in store.active_companies():
+        started = time.perf_counter()
+        retrieve(store, company_id, ["warm up"])
+        took[company_id] = round((time.perf_counter() - started) * 1000, 1)
+    return took

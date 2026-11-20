@@ -1,135 +1,88 @@
 """The only module that talks to an LLM.
 
-    OpenAICompatLLM  Groq through its OpenAI-compatible chat endpoint (plain httpx)
-    FakeLLM          deterministic stand-in: tests, and offline mode when no key is set
+    GroqLLM   the real model, through Groq's OpenAI-compatible chat API (plain httpx)
+    FakeLLM   a deterministic stand-in for tests and offline mode (no API key)
 
-Every failure becomes one of a few LLMError types, so the pipeline can decide
-"fall back" or "tell the user to try again" without knowing HTTP details.
+Both have the same method, complete_json(system, user, model, timeout_s) -> str.
+Every failure is raised as LLMError with a short `kind` ("timeout", "rate_limited",
+"unavailable", "bad_request"), so the pipeline never deals with HTTP details.
 """
 import json
 import re
 import time
 from collections import deque
-from typing import Protocol
 
 import httpx
 
 from app.config import Settings
 from app.timeouts import StageTimeout, run_with_timeout
 
-BASE_URLS = {
-    "groq": "https://api.groq.com/openai/v1",
-}
-
-# Per-model request settings, matched by prefix. Reasoning is switched off / kept low:
-# the task is read-and-cite, and hidden reasoning tokens only add latency
-# (gpt-oss-20b at effort=medium doubled p95 in our latency benchmark).
-MODEL_PARAMS = {
-    "qwen/": {"reasoning_effort": "none"},
-    "openai/gpt-oss": {"reasoning_effort": "low"},
-}
-
+GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
 MAX_OUTPUT_TOKENS = 400
 
+# Hidden "reasoning" tokens only added latency in our benchmark, so they are
+# switched off (Qwen) or kept low (gpt-oss).
+REASONING = {"qwen/": "none", "openai/gpt-oss": "low"}
 
-# ------------------------------------------------------------------ errors --
 
 class LLMError(Exception):
-    """Base class. `kind` is a short label used in logs and eval notes."""
-    kind = "error"
+    def __init__(self, kind: str, message: str):
+        super().__init__(message)
+        self.kind = kind
 
 
-class LLMTimeout(LLMError):
-    kind = "timeout"
+class GroqLLM:
+    provider = "groq"
 
-
-class LLMRateLimited(LLMError):
-    kind = "rate_limited"
-
-
-class LLMUnavailable(LLMError):
-    """Network failure or provider 5xx."""
-    kind = "unavailable"
-
-
-class LLMRequestError(LLMError):
-    """Provider rejected the request (4xx other than 429): a bug or config problem."""
-    kind = "bad_request"
-
-
-# --------------------------------------------------------------- interface --
-
-class LLM(Protocol):
-    provider: str
-
-    def complete_json(self, system: str, user: str, model: str, timeout_s: float) -> str:
-        """Return the model's raw text (expected to be a JSON object). Raise LLMError on failure."""
-        ...
-
-
-# ------------------------------------------------------------------- real --
-
-class OpenAICompatLLM:
-    def __init__(self, provider: str, api_key: str, transport: httpx.BaseTransport | None = None):
-        self.provider = provider
-        self._client = httpx.Client(
-            base_url=BASE_URLS[provider],
-            headers={"Authorization": f"Bearer {api_key}"},
-            transport=transport,  # tests inject a mock transport here
-        )
+    def __init__(self, api_key: str, transport: httpx.BaseTransport | None = None):
+        # `transport` lets tests replace the network with a fake server.
+        self._client = httpx.Client(headers={"Authorization": f"Bearer {api_key}"}, transport=transport)
 
     def complete_json(self, system: str, user: str, model: str, timeout_s: float) -> str:
         body = {
             "model": model,
-            "messages": [{"role": "system", "content": system},
-                         {"role": "user", "content": user}],
-            "temperature": 0,
+            "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
+            "temperature": 0,                              # same input -> same output
             "max_completion_tokens": MAX_OUTPUT_TOKENS,
-            "response_format": {"type": "json_object"},
+            "response_format": {"type": "json_object"},     # the API guarantees valid JSON
         }
-        for prefix, params in MODEL_PARAMS.items():
+        for prefix, effort in REASONING.items():
             if model.startswith(prefix):
-                body.update(params)
+                body["reasoning_effort"] = effort
 
         try:
-            # httpx.Timeout limits each phase (connect, each read...) separately, so a
-            # server trickling bytes could keep the call open far longer. The outer
-            # run_with_timeout caps the TOTAL wall time of the call.
-            resp = run_with_timeout(self._client.post, timeout_s, "/chat/completions",
+            # httpx's own timeout applies to each network step separately; the outer
+            # limit caps the TOTAL time of the call.
+            resp = run_with_timeout(self._client.post, timeout_s, GROQ_URL,
                                     json=body, timeout=httpx.Timeout(timeout_s))
         except (httpx.TimeoutException, StageTimeout) as e:
-            raise LLMTimeout(f"{model}: no response within {timeout_s:.1f}s") from e
+            raise LLMError("timeout", f"{model}: no response within {timeout_s:.1f}s") from e
         except httpx.HTTPError as e:
-            raise LLMUnavailable(f"{model}: {type(e).__name__}") from e
+            raise LLMError("unavailable", f"{model}: {type(e).__name__}") from e
 
         if resp.status_code == 429:
-            raise LLMRateLimited(f"{model}: rate limited")
+            raise LLMError("rate_limited", f"{model}: rate limited")
         if resp.status_code >= 500:
-            raise LLMUnavailable(f"{model}: HTTP {resp.status_code}")
+            raise LLMError("unavailable", f"{model}: HTTP {resp.status_code}")
         if resp.status_code != 200:
-            # Never log the full body blindly; keep it short.
-            raise LLMRequestError(f"{model}: HTTP {resp.status_code} {resp.text[:200]}")
-
+            raise LLMError("bad_request", f"{model}: HTTP {resp.status_code} {resp.text[:200]}")
         try:
             return resp.json()["choices"][0]["message"]["content"] or ""
         except (ValueError, KeyError, IndexError, TypeError) as e:
-            raise LLMUnavailable(f"{model}: unexpected response shape") from e
+            raise LLMError("unavailable", f"{model}: unexpected response") from e
 
-
-# ------------------------------------------------------------------- fake --
 
 _EXCERPT_RE = re.compile(r'<excerpt id="(S\d)"[^>]*>\n(.*?)\n</excerpt>', re.S)
 
 
 class FakeLLM:
-    """Deterministic LLM for tests and offline mode.
+    """Deterministic stand-in for the real model.
 
-    Default behaviour: answer with the first sentence of excerpt S1 and cite S1;
-    if there are no excerpts, say not_covered.
-
-    Tests can script exact behaviour with `script`: a queue of items, each either
-    a string (returned as the raw model output) or an exception instance (raised).
-    `delay_s` simulates a slow model. Every call is recorded in `calls`.
+    By default:
+      * a rewrite prompt -> the question itself is the only search query
+      * an answer prompt -> the first sentence of excerpt S1, citing S1
+    Tests can pass `script`: a list of replies (strings) or errors (raised), used in order.
+    `delay_s` makes it slow. Every call is recorded in `calls`.
     """
     provider = "fake"
 
@@ -140,21 +93,21 @@ class FakeLLM:
 
     def complete_json(self, system: str, user: str, model: str, timeout_s: float) -> str:
         self.calls.append({"model": model, "system": system, "user": user, "timeout_s": timeout_s})
-        if self.delay_s:
-            if self.delay_s > timeout_s:
-                time.sleep(timeout_s)
-                raise LLMTimeout(f"{model}: fake timeout")
-            time.sleep(self.delay_s)
-        if self.script:
-            item = self.script.popleft()
-            if isinstance(item, BaseException):
-                raise item
-            return item
+        if self.delay_s > timeout_s:
+            time.sleep(timeout_s)
+            raise LLMError("timeout", f"{model}: fake timeout")
+        time.sleep(self.delay_s)
 
-        if "<outline>" in user:   # query-rewrite prompt: echo the question as the only query
-            q = user.split("<question>", 1)[-1].split("</question>", 1)[0].strip()
-            return json.dumps({"queries": [q]})
-        excerpts = _EXCERPT_RE.findall(user)
+        if self.script:
+            reply = self.script.popleft()
+            if isinstance(reply, BaseException):
+                raise reply
+            return reply
+
+        if "<outline>" in user:                       # rewrite prompt
+            question = user.split("<question>")[1].split("</question>")[0].strip()
+            return json.dumps({"queries": [question]})
+        excerpts = _EXCERPT_RE.findall(user)          # answer prompt
         if not excerpts:
             return json.dumps({"status": "not_covered", "answer": "", "citations": []})
         label, text = excerpts[0]
@@ -163,9 +116,7 @@ class FakeLLM:
         return json.dumps({"status": "answered", "answer": first_sentence, "citations": [label]})
 
 
-# ----------------------------------------------------------------- factory --
-
-def build_llm(settings: Settings) -> LLM:
+def build_llm(settings: Settings):
     if settings.llm_provider == "fake":
         return FakeLLM()
-    return OpenAICompatLLM(settings.llm_provider, settings.llm_api_key)
+    return GroqLLM(settings.llm_api_key)

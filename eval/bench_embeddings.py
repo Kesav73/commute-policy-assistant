@@ -27,7 +27,7 @@ import numpy as np
 from chromadb.config import Settings as ChromaSettings
 
 from app.config import get_settings
-from app.ingest import load_policies
+from app.versioning import load_policies
 from eval.run_retrieval import (CATEGORIES, RESULTS_DIR, load_questions, score_case,
                                 summarise, validate_gold)
 

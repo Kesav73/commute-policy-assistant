@@ -2,20 +2,17 @@
 across policy versions, never a temporary failure."""
 import json
 import time
-from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
 
 import app.main as main_module
 from app.answer_cache import AnswerCache, CachedAnswer, normalise
-from app.llm import FakeLLM, LLMUnavailable
-from app.store import open_store
+from app.llm import FakeLLM, LLMError
+from app.store import PolicyStore
 from app.versioning import bootstrap, publish_policy
-from tests.conftest import bearer
+from tests.conftest import ACME_V2, POLICIES, bearer
 
-ROOT = Path(__file__).resolve().parent.parent
-ACME_V2 = (ROOT / "sample_data" / "policy_updates" / "acme_v2.md").read_text()
 Q = "After what time do women get a security escort on drops?"
 
 
@@ -64,8 +61,8 @@ def test_size_zero_disables():
 
 @pytest.fixture
 def api(tmp_path):
-    store = open_store(tmp_path / "data")
-    bootstrap(store, ROOT / "policies")
+    store = PolicyStore(tmp_path / "data")
+    bootstrap(store, POLICIES)
     llm = FakeLLM()
     main_module.app.state.store, main_module.app.state.llm = store, llm
     main_module.app.state.answer_cache = AnswerCache()
@@ -106,7 +103,7 @@ def test_new_policy_version_is_never_answered_from_the_old_cache(api, token_for)
 
 def test_failure_is_not_cached(api, token_for):
     client, llm, _ = api
-    llm.script.extend([json.dumps({"queries": ["escort"]}), LLMUnavailable("down")])
+    llm.script.extend([json.dumps({"queries": ["escort"]}), LLMError("unavailable", "down")])
     h = bearer(token_for("E-ACME-001"))
     assert client.post("/ask", json={"question": Q}, headers=h).status_code == 503
     ok = client.post("/ask", json={"question": Q}, headers=h)

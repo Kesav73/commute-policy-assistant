@@ -1,7 +1,23 @@
-"""The end-to-end grader itself: checks and failure causes (no LLM, no HTTP)."""
+"""The evaluation itself is tested: the gold set stays valid, and the end-to-end grader scores correctly."""
+from collections import Counter
 from types import SimpleNamespace
 
+from app.config import get_settings
 from eval.run_e2e import score
+from eval.run_retrieval import load_questions, validate_gold
+
+
+def test_gold_set_is_valid():
+    validate_gold(load_questions(), get_settings().policies_dir)  # raises SystemExit if not
+
+
+def test_gold_set_size_and_balance():
+    cases = load_questions()
+    assert Counter(c["company"] for c in cases) == {"acme": 30, "bolt": 30, "crest": 30}
+    cats = Counter(c["category"] for c in cases)
+    for needed in ("paraphrase", "multi_hop", "not_covered", "cross_company", "injection"):
+        assert cats[needed] >= 3, needed
+
 
 CASE = {"company": "acme", "expected_status": "answered", "required": ["4.1"],
         "must_include": [["8:00 PM", "8 PM"]], "must_not_include": ["10:00 PM"]}
@@ -9,7 +25,7 @@ NC_CASE = {**CASE, "expected_status": "not_covered", "required": [], "must_inclu
 
 
 def res(retrieved=("4.1", "4.2", "4.3"), calls=1, reason="answered"):
-    return SimpleNamespace(retrieved=[{"section": s} for s in retrieved], llm_calls=calls, reason=reason)
+    return SimpleNamespace(retrieved=[{"section": s} for s in retrieved], llm_calls=calls, reason=reason, models=[])
 
 
 def body(status="answered", answer="Escort after 8:00 PM.", sections=("4.1",), doc="acme-transport-policy"):

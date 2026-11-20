@@ -25,9 +25,9 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from app.config import get_settings
-from app.ingest import ingest_all
-from app.retriever import TOP_K, rank_candidates
-from app.store import open_store
+from app.retriever import TOP_K, rank_query, vector_search
+from app.store import PolicyStore
+from app.versioning import ingest_all
 from eval.run_retrieval import CATEGORIES, RESULTS_DIR, load_questions, score_case, summarise, validate_gold
 
 CACHE = Path.home() / ".cache" / "fastembed"
@@ -62,6 +62,19 @@ def auc(pos: list[float], neg: list[float]) -> float:
     return sum(pairs) / len(pairs)
 
 
+def candidates(store, company: str, question: str, mode: str, pool: int | None):
+    """First stage: the company's chunks ranked by vector search alone or by hybrid
+    search, cut to `pool`. Returns (chunks best first, closest vector distance)."""
+    if mode == "hybrid":
+        ranked, best = rank_query(store, company, None, question)
+    else:
+        ids, distances = vector_search(store, company, None, question)
+        hybrid_by_id = {c.id: c for c in rank_query(store, company, None, question)[0]}
+        ranked = [hybrid_by_id[i] for i in ids]          # same chunk objects, vector order
+        best = min(distances.values()) if distances else None
+    return ranked[:pool] if pool else ranked, best
+
+
 def run_variant(v: Variant, store, cases, models: dict) -> dict:
     model = None
     if v.reranker:
@@ -71,15 +84,14 @@ def run_variant(v: Variant, store, cases, models: dict) -> dict:
         model = models[v.reranker]
 
     def run(c):
-        cand = rank_candidates(store, c["company"], c["question"], mode=v.mode, pool=v.pool)
-        chunks = cand.chunks
+        chunks, best_distance = candidates(store, c["company"], c["question"], v.mode, v.pool)
         top_score = None
         if model is not None:
             scores = list(model.rerank(c["question"], [ch.text for ch in chunks]))
             order = sorted(range(len(chunks)), key=lambda i: -scores[i])
             chunks = [chunks[i] for i in order]
             top_score = float(scores[order[0]])
-        return chunks[:TOP_K], cand.best_distance, top_score
+        return chunks[:TOP_K], best_distance, top_score
 
     run(cases[0])   # warm-up: load models, build BM25 caches
     rows, sig = [], []
@@ -113,7 +125,7 @@ def main() -> None:
 
     results, models = [], {}
     with tempfile.TemporaryDirectory() as tmp:
-        store = open_store(Path(tmp))
+        store = PolicyStore(Path(tmp))
         ingest_all(store, s.policies_dir)
         for v in variants:
             print(f"running {v.label} ...", flush=True)

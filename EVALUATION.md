@@ -13,7 +13,7 @@ How the Commute Policy Assistant was tested, how it scores, how it improved, and
 | LLM calls per question | **≤ 2** (79 questions used 2, 11 stopped after 1) |
 | Citations per answer | **≤ 3** |
 | Retrieval: right sections in the top 3 (recall@3) | **0.98** (baseline 0.82) |
-| Automated tests (fake LLM, no API key) | **240 passing** |
+| Automated tests (fake LLM, no API key) | **217 passing** |
 
 Source: `eval/results/e2e_summary.json`, `eval/results/e2e.jsonl`, `eval/results/rewrite_summary.json`.
 
@@ -62,17 +62,19 @@ A chunk from another company in the results fails the case outright.
 
 **Why deterministic checks and not an LLM judge:** the same answer always gets the same score, a rerun costs nothing, and every failure names the exact missing fact or section.
 
-**Automated tests** (`pytest`, 240 tests, fake LLM): company isolation (body field, query string, header, prompt text), JWT tampering and expiry, the 2-call and 3-citation limits, invented citations, malformed model output, prompt injection (in policies and questions), time limits with forced hangs at every stage, policy versioning (only the new version answers; a failed or crashed update leaves the old one active), the answer cache, and the evaluation grader itself.
+**Automated tests** (`pytest`, 217 tests, fake LLM): company isolation (body field, query string, header, prompt text), JWT tampering and expiry, the 2-call and 3-citation limits, invented citations, malformed model output, prompt injection (in policies and questions), time limits with forced hangs at every stage, policy versioning (only the new version answers; a failed or crashed update leaves the old one active), the answer cache, and the evaluation grader itself.
 
 ## How to rerun
 
 ```bash
-docker compose run --rm app pytest -q                          # 240 tests, no API key needed
+docker compose run --rm app pytest -q                          # 217 tests, no API key needed
 docker compose run --rm app python -m eval.run_retrieval       # retrieval scorecard, no key needed
 docker compose run --rm app python -m eval.run_e2e --offline   # full /ask flow with the fake LLM, no key
 docker compose run --rm app python -m eval.run_e2e             # real LLM (needs GROQ_API_KEY), ~35 min
 ```
-The real-LLM run is paced (20 s between questions) to stay within Groq's free tier, and uses about 145k of its 200k daily tokens. LLM responses are cached locally in `eval/results/llm_cache.jsonl` (not committed), so after a first run, a rerun following a code-only change costs no tokens. The retrieval benchmarks behind "Before and after" are `eval/bench_embeddings.py`, `eval/bench_rerank.py` and `eval/bench_rewrite.py`.
+The real-LLM run is paced (20 s between questions) to stay within Groq's free tier, and uses about 145k of its 200k daily tokens. LLM responses are cached locally in `eval/results/llm_cache.jsonl` (not committed), so after a first run, a rerun following a code-only change costs no tokens. `python -m eval.run_e2e --cache-only` replays only cached responses and never calls the LLM.
+
+The retrieval benchmarks behind "Before and after" are `eval/bench_embeddings.py`, `eval/bench_rerank.py` and `eval/bench_rewrite.py` (no API key needed for the first two; `python -m eval.bench_rewrite --use-stored` replays the stored rewrites in `eval/results/rewrites.jsonl` without an LLM).
 
 ## Results (final run, submission code)
 
@@ -116,7 +118,7 @@ Retrieval numbers are on the same 75 answerable questions. "Pass" = every needed
 
 nomic retrieved 8 more questions correctly for ~30 ms. (A larger model, bge-large, tied it at twice the latency and a 1.2 GB download.)
 
-**Step 2: hybrid search vs re-ranking,** on top of nomic (`RETRIEVAL_MODE=vector|hybrid`, `eval/bench_rerank.py`):
+**Step 2: hybrid search vs re-ranking,** on top of nomic (`eval/bench_rerank.py`):
 
 | Option | recall@1 | recall@3 | Pass | Added latency |
 |---|---|---|---|---|
@@ -132,10 +134,10 @@ Hybrid matched the best re-ranker at a tiny fraction of the cost; the other thre
 | Option | recall@1 | recall@3 | Pass | Added latency |
 |---|---|---|---|---|
 | hybrid, original question | 0.63 | 0.92 | 66 | — |
-| rewritten queries, merged by agreement (RRF) | 0.68 | 0.93 | 66 | ~0.5 s |
+| rewritten queries, merged by agreement (RRF) | 0.67 | 0.93 | 66 | ~0.5 s |
 | **rewritten queries, merged round-robin** ✅ | **0.77** | **0.98** | **72** | ~0.5 s |
 
-Splitting a question by topic only helps if each sub-query keeps its own best section, which round-robin guarantees.
+Splitting a question by topic only helps if each sub-query keeps its own best section, which round-robin guarantees. (The rewrites were generated before the input verdict was added to the same prompt; the final end-to-end run below uses the final prompt.)
 
 **Effect on the answers** (all 90 questions, real LLM):
 
@@ -160,6 +162,6 @@ Grading is done by string matching: a correct answer worded differently from the
 
 ## Trade-offs
 
-**1. How to use the two LLM calls.** A typical RAG design spends separate LLM calls on rewriting the question, screening it for attacks (an input guardrail), writing the answer, and sometimes checking the answer against its sources (a grounding check). With a limit of two calls per question, we merged them: **call 1 rewrites the question and judges it** (normal / injection / other company / off-topic) in one response, and **call 2 writes the answer and can refuse it** (`blocked`). The remaining checks are plain code: citations must come from the retrieved excerpts, answers must not name another company or repeat injected text, and policy text that reads like instructions is quarantined at ingestion. This gave the biggest single improvement (retrieval recall@3 0.92 → 0.98, answers 79 → 83). It cost about 0.5 s per question (p95 0.73 → 1.25 s), and the answer call has no backup model left: if it fails, the employee gets "please try again".
+**1. How to use the two LLM calls.** A typical RAG design spends separate LLM calls on rewriting the question, screening it for attacks (an input guardrail), writing the answer, and sometimes checking the answer against its sources (a grounding check). With a limit of two calls per question, we merged them: **call 1 rewrites the question and judges it** (normal / injection / other company / off-topic) in one response, and **call 2 writes the answer and can refuse it** (`blocked`). The remaining checks are plain code: citations must come from the retrieved excerpts, answers must not name another company or repeat injected text, and policy text that reads like instructions is quarantined at ingestion. This gave the biggest single improvement (retrieval recall@3 0.92 → 0.98, answers 79 → 83). It cost about 0.5 s per question (p95 0.73 → 1.25 s). A fallback model is kept within the limit: if call 1 fails because the model is down, call 2 goes to a different model (gpt-oss-120b); if call 1 succeeded and the answer call then fails, the employee gets "please try again" rather than a third call.
 
 **2. Hybrid search instead of a re-ranker.** A cross-encoder re-ranker is the usual way to improve retrieval, but the best of four only tied hybrid search (66 vs. 66 questions) while adding about 1 s per question and a 0.6 GB model, and the other three were worse. Hybrid search costs under 0.5 ms and about 85 lines of code, so we kept it and dropped re-ranking.

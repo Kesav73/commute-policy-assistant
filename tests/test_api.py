@@ -1,25 +1,13 @@
-"""POST /ask end to end over HTTP: token -> company -> pipeline -> JSON response."""
-from pathlib import Path
-
+"""POST /ask over HTTP: token -> company -> pipeline -> JSON response, and every error shape."""
 import pytest
 from fastapi.testclient import TestClient
 
 from app import messages
-from app.ingest import ingest_all
-from app.llm import FakeLLM, LLMTimeout
+from app.llm import FakeLLM, LLMError
 from app.main import app
-from app.store import open_store
-from tests.conftest import bearer
+from tests.conftest import ESCORT_Q, bearer
 
-POLICIES = Path(__file__).resolve().parent.parent / "policies"
-Q = {"question": "Does a trained security escort travel with women on night drops?"}
-
-
-@pytest.fixture(scope="module")
-def store(tmp_path_factory):
-    client = open_store(tmp_path_factory.mktemp("data"))
-    ingest_all(client, POLICIES)
-    return client
+Q = {"question": ESCORT_Q}
 
 
 @pytest.fixture
@@ -29,7 +17,7 @@ def llm():
 
 @pytest.fixture(autouse=True)
 def _app_state(store, llm):
-    """Skip the startup hook (slow re-ingest per test); give the app its store and LLM directly."""
+    """Skip the startup hook; give the app the shared store and a fake LLM directly."""
     app.state.store, app.state.llm = store, llm
     yield
     del app.state.store, app.state.llm
@@ -130,7 +118,7 @@ def test_not_covered_is_200_with_desk_message(client, acme):
 # --------------------------------------------------------------- failure --
 
 def test_llm_down_is_503_try_again(client, acme, llm):
-    llm.script.extend([LLMTimeout("t"), LLMTimeout("t")])
+    llm.script.extend([LLMError("timeout", "t"), LLMError("timeout", "t")])
     r = client.post("/ask", json=Q, headers=acme)
     assert r.status_code == 503
     assert r.headers["Retry-After"] == "5"

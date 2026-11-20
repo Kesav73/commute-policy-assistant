@@ -43,7 +43,6 @@ class AnswerCache:
         self.ttl_s = ttl_s
         self._data: OrderedDict[tuple, tuple[float, CachedAnswer]] = OrderedDict()
         self._lock = threading.Lock()
-        self.hits = self.misses = 0
 
     @staticmethod
     def key(company_id: str, version: int, question: str) -> tuple:
@@ -58,10 +57,8 @@ class AnswerCache:
             if item is None or time.monotonic() - item[0] > self.ttl_s:
                 if item is not None:
                     del self._data[k]          # expired
-                self.misses += 1
                 return None
             self._data.move_to_end(k)          # recently used
-            self.hits += 1
             return item[1]
 
     def put(self, company_id: str, question: str, answer: CachedAnswer) -> None:
@@ -74,14 +71,12 @@ class AnswerCache:
             while len(self._data) > self.max_entries:
                 self._data.popitem(last=False)  # least recently used leaves first
 
-    def drop_company(self, company_id: str) -> int:
-        """Free the memory of a company's entries (e.g. after a new version is
-        published). Not needed for correctness - the version key already does that."""
+    def drop_company(self, company_id: str) -> None:
+        """Free the memory of a company's entries after it publishes a new version.
+        Not needed for correctness: the version in the key already does that."""
         with self._lock:
-            old = [k for k in self._data if k[0] == company_id]
-            for k in old:
-                del self._data[k]
-            return len(old)
+            for key in [k for k in self._data if k[0] == company_id]:
+                del self._data[key]
 
     def __len__(self) -> int:
         return len(self._data)
